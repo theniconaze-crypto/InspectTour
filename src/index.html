@@ -1030,13 +1030,18 @@ function isPointAnswered(point, r) {
 
 function renderHome() {
   const grid = document.getElementById('home-tours-grid');
+  reconcileSessions();
   let inProgress = 0, done = 0, totalAlerts = 0;
 
   state.tours.forEach(t => {
     const s = state.sessions[t.id];
-    if (s) {
-      if (s.status === 'completed') done++; else inProgress++;
+    const hist = getHistory(t.id);
+    if (s && s.status !== 'completed') {
+      inProgress++;
       totalAlerts += Object.values(s.results).filter(r => r.alert).length;
+    } else if (hist.length) {
+      done++;                                                // dernier relevé terminé
+      totalAlerts += evalEntry(hist[hist.length - 1]).anomalies;
     }
   });
 
@@ -1070,7 +1075,10 @@ function renderHome() {
       else { statusLabel = 'En cours'; statusColor = 'amber'; }
     }
 
-    const alerts = session ? Object.values(session.results).filter(r => r.alert).length : 0;
+    const lastEntry = getHistory(tour.id).slice(-1)[0];
+    const alerts = (session && session.status !== 'completed')
+      ? Object.values(session.results).filter(r => r.alert).length
+      : (lastEntry ? evalEntry(lastEntry).anomalies : 0);
 
     let actionButtons;
     if (!session) {
@@ -1170,6 +1178,31 @@ function renderHome() {
   lucide.createIcons();
 }
 
+/** Nettoie les états devenus incohérents (tournée supprimée, relevé terminé dont l'archive a été supprimée) */
+function reconcileSessions() {
+  let changed = false;
+  Object.keys(state.sessions).forEach(id => {
+    const s = state.sessions[id];
+    if (!state.tours.some(t => t.id === id) ||
+        (s.status === 'completed' && !(state.history[id] || []).length)) {
+      delete state.sessions[id]; changed = true;
+    }
+  });
+  Object.keys(state.history).forEach(id => {
+    if (!state.tours.some(t => t.id === id)) { delete state.history[id]; changed = true; }
+  });
+  if (changed) saveState();
+}
+
+/** Met à jour tous les indicateurs affichés (cloche, compteurs de l'accueil, KPI de la tournée ouverte) */
+function refreshKPIs() {
+  reconcileSessions();
+  updateHeaderUser();
+  const visible = id => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); };
+  if (visible('view-home')) renderHome();
+  else if (visible('view-detail')) renderDetail();
+}
+
 function confirmDeleteTour(tourId) {
   if (!requirePerm('edit')) return;
   confirmAction("Supprimer définitivement cette tournée ainsi que son historique de relevés ?", () => {
@@ -1177,7 +1210,7 @@ function confirmDeleteTour(tourId) {
     delete state.sessions[tourId];
     delete state.history[tourId];
     saveState();
-    renderHome();
+    refreshKPIs();
     toast('Tournée supprimée', 'success');
   });
 }
@@ -1466,7 +1499,7 @@ async function handleExcelImport(event) {
     });
 
     saveState();
-    renderHome();
+    refreshKPIs();
 
     if (importedCount > 0) {
       toast(`${importedCount} tournée(s) importée(s) avec succès`, 'success');
@@ -2054,6 +2087,7 @@ function finishTour() {
   session.completedAt = new Date().toISOString();
   if (!session.archivedId) archiveSession(getCurrentTour(), session);   // alimente l'historique
   saveState();
+  refreshKPIs();
   openReportModal();
 }
 
@@ -2411,7 +2445,7 @@ function deleteEntry(entryId) {
   confirmAction('Supprimer définitivement ce relevé de l\'historique ?', () => {
     state.history[currentTourId] = (state.history[currentTourId] || []).filter(e => e.id !== entryId);
     saveState();
-    renderDetail();
+    refreshKPIs();
     toast('Relevé supprimé', 'success');
   });
 }
