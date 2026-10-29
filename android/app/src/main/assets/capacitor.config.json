@@ -1,0 +1,9 @@
+{
+	"appId": "com.inspectour.app",
+	"appName": "InspecTour",
+	"webDir": "www",
+	"android": {
+		"allowMixedContent": false
+	},
+	"backgroundColor": "#f8fafc"
+}

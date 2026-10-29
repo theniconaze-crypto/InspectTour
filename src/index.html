@@ -1,0 +1,2396 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4f46e5">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>InspecTour — Tournées d'inspection</title>
+
+<link rel="stylesheet" href="vendor/tailwind.css">
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="vendor/android-bridge.js"></script>
+<script src="vendor/lucide.min.js"></script>
+
+
+<style>
+  html { -webkit-tap-highlight-color: transparent; }
+  body { overscroll-behavior-y: none; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; }
+  @keyframes slide-in { from { transform: translateX(110%); opacity:0; } to { transform: translateX(0); opacity:1; } }
+  .animate-slide-in { animation: slide-in .3s ease-out; }
+  .toast-fade { transition: opacity .3s ease; }
+  #print-area { display: none; }
+  @media print {
+    body * { visibility: hidden; }
+    #print-area, #print-area * { visibility: visible; }
+    #print-area { display: block !important; position: absolute; top: 0; left: 0; width: 100%; }
+    .no-print { display: none !important; }
+  }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen">
+
+<div id="app" class="min-h-screen flex flex-col">
+
+  <!-- ============== HEADER ============== -->
+  <header class="bg-white/90 backdrop-blur border-b border-slate-200 sticky top-0 z-30 no-print">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <button id="btn-back" class="hidden p-2 rounded-xl hover:bg-slate-100 active:scale-95 transition">
+          <i data-lucide="arrow-left" class="w-5 h-5 text-slate-600"></i>
+        </button>
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm">
+            <i data-lucide="clipboard-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h1 id="header-title" class="font-bold text-base sm:text-lg leading-tight text-slate-800">InspecTour</h1>
+            <p id="header-subtitle" class="text-xs text-slate-400 truncate max-w-[180px] sm:max-w-xs">Gestion des tournées d'inspection</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============== CONTENU PRINCIPAL ============== -->
+  <main class="flex-1 max-w-6xl w-full mx-auto px-4 py-5 no-print">
+
+    <!-- ========== VUE : ACCUEIL ========== -->
+    <section id="view-home">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+          <p class="text-xs text-slate-400 mb-1">Tournées</p>
+          <p id="stat-total" class="text-2xl font-bold text-slate-800">0</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+          <p class="text-xs text-slate-400 mb-1">En cours</p>
+          <p id="stat-progress" class="text-2xl font-bold text-amber-500">0</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+          <p class="text-xs text-slate-400 mb-1">Terminées</p>
+          <p id="stat-done" class="text-2xl font-bold text-green-600">0</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+          <p class="text-xs text-slate-400 mb-1">Anomalies</p>
+          <p id="stat-alerts" class="text-2xl font-bold text-red-500">0</p>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <button onclick="createNewTour()" class="flex-1 bg-indigo-600 text-white font-semibold py-3.5 rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-700 active:scale-[0.98] transition shadow-sm">
+          <i data-lucide="plus-circle" class="w-5 h-5"></i> Nouvelle tournée
+        </button>
+        <button onclick="document.getElementById('excel-input').click()" class="flex-1 bg-white border-2 border-dashed border-slate-300 text-slate-600 font-semibold py-3.5 rounded-2xl flex items-center justify-center gap-2 hover:border-indigo-400 hover:text-indigo-600 active:scale-[0.98] transition">
+          <i data-lucide="file-up" class="w-5 h-5"></i> Importer un fichier Excel
+        </button>
+        <input type="file" id="excel-input" accept=".xlsx,.xls" class="hidden" onchange="handleExcelImport(event)">
+        <button onclick="createFolder()" class="flex-1 bg-white border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-2xl flex items-center justify-center gap-2 hover:border-indigo-400 hover:text-indigo-600 active:scale-[0.98] transition">
+          <i data-lucide="folder-plus" class="w-5 h-5"></i> Nouveau dossier
+        </button>
+      </div>
+
+      <h2 class="font-semibold text-slate-700 mb-3">Mes tournées</h2>
+      <div id="home-tours-grid" class="space-y-7"></div>
+    </section>
+
+    <!-- ========== VUE : ÉDITEUR DE TOURNÉE ========== -->
+    <section id="view-editor" class="hidden">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-5">
+        <label class="text-xs font-medium text-slate-500">Nom de la tournée</label>
+        <input id="editor-tour-name" oninput="updateTourMeta()" class="w-full text-lg font-semibold border-0 border-b-2 border-slate-100 focus:border-indigo-500 focus:ring-0 px-0 py-1.5 bg-transparent">
+        <label class="text-xs font-medium text-slate-500 mt-4 block">Description (optionnel)</label>
+        <textarea id="editor-tour-desc" oninput="updateTourMeta()" rows="2" class="w-full text-sm border border-slate-200 rounded-xl p-2.5 mt-1 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none"></textarea>
+      </div>
+
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold text-slate-700">Points de contrôle (<span id="editor-points-count">0</span>)</h2>
+        <button onclick="openPointModal()" class="bg-indigo-600 text-white text-sm font-medium px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 hover:bg-indigo-700 active:scale-95 transition">
+          <i data-lucide="plus" class="w-4 h-4"></i> Ajouter
+        </button>
+      </div>
+      <div id="editor-points-list" class="space-y-2 pb-10"></div>
+    </section>
+
+    <!-- ========== VUE : PASSAGE DE TOURNÉE ========== -->
+    <section id="view-execution" class="hidden pb-28">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
+        <h2 id="exec-tour-name" class="text-xl font-bold text-slate-800"></h2>
+        <div class="grid grid-cols-2 gap-3 mt-3">
+          <div>
+            <label class="text-xs font-medium text-slate-500">Opérateur</label>
+            <input id="exec-operator" oninput="updateOperator()" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 mt-1 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none" placeholder="Nom de l'inspecteur">
+          </div>
+          <div>
+            <label class="text-xs font-medium text-slate-500">Date</label>
+            <input id="exec-date" type="date" oninput="updateSessionDate()" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 mt-1 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none">
+          </div>
+        </div>
+      </div>
+
+      <div class="sticky top-[68px] z-20 bg-slate-50/95 backdrop-blur py-2 mb-3">
+        <div class="flex justify-between text-xs text-slate-500 mb-1">
+          <span>Progression</span><span id="exec-progress-text">0%</span>
+        </div>
+        <div class="w-full bg-white rounded-full h-2.5 shadow-inner border border-slate-100">
+          <div id="exec-progress-bar" class="h-2.5 rounded-full bg-indigo-500 transition-all duration-300" style="width:0%"></div>
+        </div>
+      </div>
+
+      <div id="exec-points-list" class="space-y-3"></div>
+
+      <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3 z-20">
+        <div class="max-w-6xl mx-auto flex gap-3">
+          <button onclick="showView('home')" class="px-4 py-3.5 rounded-xl bg-slate-100 font-medium hover:bg-slate-200 active:scale-95 transition">Quitter</button>
+          <button onclick="finishTour()" class="flex-1 bg-green-600 text-white font-semibold py-3.5 rounded-xl hover:bg-green-700 active:scale-[0.98] transition flex items-center justify-center gap-2">
+            <i data-lucide="check-circle" class="w-5 h-5"></i> Terminer la tournée
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== VUE : DÉTAIL TOURNÉE (HISTORIQUE + KPI) ========== -->
+    <section id="view-detail" class="hidden">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <h2 id="detail-tour-name" class="text-xl font-bold text-slate-800 truncate"></h2>
+            <p id="detail-tour-meta" class="text-xs text-slate-400 mt-1"></p>
+          </div>
+          <button onclick="startTour(currentTourId)" class="flex-shrink-0 bg-indigo-600 text-white text-sm font-medium px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 hover:bg-indigo-700 active:scale-95 transition">
+            <i data-lucide="play" class="w-4 h-4"></i> <span class="hidden sm:inline">Nouveau relevé</span>
+          </button>
+        </div>
+        <div class="flex gap-1 mt-4 bg-slate-100 p-1 rounded-xl">
+          <button id="tab-btn-history" onclick="setDetailTab('history')"><i data-lucide="history" class="w-4 h-4"></i> Historique</button>
+          <button id="tab-btn-kpi" onclick="setDetailTab('kpi')"><i data-lucide="gauge" class="w-4 h-4"></i> KPI</button>
+        </div>
+      </div>
+      <div id="detail-content" class="pb-10"></div>
+    </section>
+  </main>
+
+  <!-- ============== TOASTS ============== -->
+  <div id="toast-container" class="fixed bottom-4 right-4 left-4 sm:left-auto z-50 flex flex-col gap-2 no-print items-end"></div>
+
+  <!-- ============== MODAL GÉNÉRIQUE ============== -->
+  <div id="modal-overlay" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center no-print" onclick="if(event.target===this) closeModal()">
+    <div id="modal-content" class="bg-white rounded-t-3xl sm:rounded-2xl p-6 w-full sm:max-w-md max-h-[92vh] overflow-y-auto shadow-xl"></div>
+  </div>
+
+  <!-- ============== ZONE D'IMPRESSION (PDF) ============== -->
+  <div id="print-area"></div>
+</div>
+
+<script>
+/* =========================================================================
+   INSPECTOUR — Application de gestion de tournées d'inspection
+   ========================================================================= */
+
+/* --------------------------- 1. ÉTAT GLOBAL --------------------------- */
+const STORAGE_KEY = 'inspectour_data_v3';
+
+let state = {
+  tours: [],
+  sessions: {},
+  history: {},  // tourId -> [ relevés terminés archivés ]
+  folders: []   // [{ id, name, collapsed }] — les tournées y sont rattachées via tour.folderId
+};
+
+let currentTourId = null;
+
+
+/* --------------------------- 2. UTILITAIRES ---------------------------- */
+
+function genId() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/[&<>"']/g, m => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+  }[m]));
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
+    ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function isNumeric(v) {
+  if (v === '' || v === null || v === undefined) return false;
+  return !isNaN(parseFloat(v)) && isFinite(v);
+}
+
+function getCurrentTour() {
+  return state.tours.find(t => t.id === currentTourId);
+}
+
+function toast(message, type = 'info') {
+  const styles = {
+    success: { bg: 'bg-green-600', icon: 'check-circle' },
+    error:   { bg: 'bg-red-600',   icon: 'x-circle' },
+    warning: { bg: 'bg-amber-500', icon: 'alert-triangle' },
+    info:    { bg: 'bg-slate-700', icon: 'info' }
+  };
+  const s = styles[type] || styles.info;
+  const el = document.createElement('div');
+  el.className = `toast-fade flex items-center gap-2 ${s.bg} text-white text-sm font-medium px-4 py-3 rounded-xl shadow-lg animate-slide-in max-w-sm`;
+  el.innerHTML = `<i data-lucide="${s.icon}" class="w-4 h-4 flex-shrink-0"></i><span>${escapeHtml(message)}</span>`;
+  document.getElementById('toast-container').appendChild(el);
+  lucide.createIcons();
+  setTimeout(() => {
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 300);
+  }, 4000);
+}
+
+
+/* --------------------------- 3. PERSISTANCE ---------------------------- */
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (err) {
+    console.error('Erreur de sauvegarde', err);
+    toast("Erreur de sauvegarde : stockage local plein (photos trop volumineuses ?)", 'error');
+  }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) state = JSON.parse(raw);
+    if (!state.tours) state.tours = [];
+    if (!state.sessions) state.sessions = {};
+    if (!state.history) state.history = {};
+    if (!state.folders) state.folders = [];
+
+    // Migration : les tournées déjà terminées avant l'arrivée de l'historique y sont archivées
+    let migrated = false;
+    state.tours.forEach(tour => {
+      const s = state.sessions[tour.id];
+      if (s && s.status === 'completed' && !s.archivedId) {
+        archiveSession(tour, s);
+        migrated = true;
+      }
+    });
+    if (migrated) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (err) {
+    console.error('Erreur de chargement des données', err);
+    toast("Impossible de charger les données enregistrées.", 'error');
+  }
+}
+
+/** Données de démonstration — reflète le format réel des fiches (cf capture) */
+function seedDemoData() {
+  const points = [
+    pt('1', 'Relever pression bouteille oxygène', '10<p<200'),
+    pt('2', 'Relever pression pré-détente', '< 8.5'),
+    pt('3', 'Relever pression détente', '< 1'),
+    pt('4', 'Contrôler présence bouteilles (vide/pleine)', 'C'),
+    pt('5', 'Contrôle pression - VM105', '> 2.5bar'),
+    pt('6', 'Relever Δp', '< 1'),
+    pt('8', 'Relever puissance UV101', '110<x<150'),
+    pt('12', 'Contrôle capteur ozone ambiants x2', '<0 = C'),
+    pt('22', 'Relever T° UV 101', '10°<T<25°'),
+    pt('29', 'Contrôle Test lampes armoire', 'C'),
+    pt('30', 'Relever Temps Ozonation week-end', '?'),
+    pt(null, 'Contrôle absence bruits anormaux', 'C'),
+    pt(null, 'Contrôle zone propre', 'C'),
+    pt(null, 'Contrôle absence eau sur le sol', 'C'),
+    pt(null, 'Eteindre les lumières en sortant', 'C'),
+    // --- Champs spécifiques : texte libre & signatures électroniques ---
+    { id: genId(), number: null, name: 'Points de Vigilance:', type: 'text', targetRaw: 'Texte libre', unit: '', target: null, min: null, max: null },
+    { id: genId(), number: null, name: 'VISA Executant', type: 'signature', targetRaw: 'Signature électronique', unit: '', target: null, min: null, max: null },
+    { id: genId(), number: null, name: 'VISA Manager Utilités', type: 'signature', targetRaw: 'Signature électronique', unit: '', target: null, min: null, max: null },
+    { id: genId(), number: null, name: 'Commentaires:', type: 'text', targetRaw: 'Texte libre', unit: '', target: null, min: null, max: null }
+  ];
+
+  state.tours.push({
+    id: genId(),
+    name: 'ZONE A25 - Station CHRIST',
+    description: "Exemple de tournée (données de démonstration)",
+    createdAt: Date.now(),
+    points
+  });
+
+  /** Mini-helper local pour construire un point à partir d'une cible brute (démo) */
+  function pt(number, name, targetRaw) {
+    const parsed = parseTargetExpression(targetRaw);
+    return {
+      id: genId(), number, name,
+      type: parsed.type, targetRaw,
+      unit: parsed.unit, target: parsed.target,
+      min: parsed.min, max: parsed.max
+    };
+  }
+}
+
+
+/* --------------------------- 4. NAVIGATION ------------------------------ */
+
+function showView(view) {
+  document.querySelectorAll('#view-home, #view-editor, #view-execution, #view-detail').forEach(v => v.classList.add('hidden'));
+  document.getElementById('view-' + view).classList.remove('hidden');
+
+  const backBtn = document.getElementById('btn-back');
+  const title = document.getElementById('header-title');
+  const subtitle = document.getElementById('header-subtitle');
+
+  if (view === 'home') {
+    backBtn.classList.add('hidden');
+    title.textContent = 'InspecTour';
+    subtitle.textContent = "Gestion des tournées d'inspection";
+    renderHome();
+  } else if (view === 'editor') {
+    backBtn.classList.remove('hidden');
+    title.textContent = 'Édition de la tournée';
+    subtitle.textContent = getCurrentTour()?.name || '';
+    renderEditor();
+  } else if (view === 'execution') {
+    backBtn.classList.remove('hidden');
+    title.textContent = 'Tournée en cours';
+    subtitle.textContent = getCurrentTour()?.name || '';
+  } else if (view === 'detail') {
+    backBtn.classList.remove('hidden');
+    title.textContent = 'Historique & KPI';
+    subtitle.textContent = getCurrentTour()?.name || '';
+    renderDetail();
+  }
+  window.scrollTo(0, 0);
+}
+
+
+/* --------------------------- 5. MODALES ---------------------------- */
+
+function openModal(innerHtml) {
+  document.getElementById('modal-content').innerHTML = innerHtml;
+  document.getElementById('modal-overlay').classList.remove('hidden');
+  lucide.createIcons();
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+  document.getElementById('modal-content').innerHTML = '';
+}
+
+function confirmAction(message, onConfirm, confirmLabel = 'Confirmer') {
+  openModal(`
+    <div class="text-center">
+      <div class="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+        <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+      </div>
+      <p class="text-slate-700 font-medium mb-6">${escapeHtml(message)}</p>
+      <div class="flex gap-2">
+        <button onclick="closeModal()" class="flex-1 py-2.5 rounded-xl bg-slate-100 font-medium hover:bg-slate-200">Annuler</button>
+        <button id="confirm-yes-btn" class="flex-1 py-2.5 rounded-xl bg-red-600 text-white font-medium hover:bg-red-700">${escapeHtml(confirmLabel)}</button>
+      </div>
+    </div>
+  `);
+  document.getElementById('confirm-yes-btn').onclick = () => { closeModal(); onConfirm(); };
+}
+
+function viewPhoto(url) {
+  openModal(`
+    <img src="${url}" class="w-full rounded-xl mb-4">
+    <button onclick="closeModal()" class="w-full py-2.5 rounded-xl bg-slate-100 font-medium hover:bg-slate-200">Fermer</button>
+  `);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+
+/* --------------------- 6. INTERPRÉTATION DES CIBLES ---------------------
+   Cœur du système : transforme une cible brute (telle que saisie dans les
+   fiches Excel) en règle de validation exploitable par l'application.
+   Formats supportés :
+     "10<p<200"      -> plage [10;200]
+     "< 8.5"         -> seuil max 8.5
+     "> 2.5bar"      -> seuil min 2.5, unité bar
+     "C"             -> conformité attendue
+     "<0 = C"        -> seuil numérique (max 0) + info conformité
+     "10°<T<25°"     -> plage [10;25] en °
+     "?" / ""        -> libre, aucune validation automatique
+     "25"            -> valeur cible ponctuelle (informative)
+   ------------------------------------------------------------------------- */
+
+function parseTargetExpression(raw) {
+  const original = (raw === null || raw === undefined) ? '' : String(raw).trim();
+  const result = { targetRaw: original, type: 'numeric', min: null, max: null, target: null, unit: '', label: '' };
+
+  if (original === '' || original === '?' || original === '-' || original === '/') {
+    result.label = 'Libre (aucun seuil défini)';
+    return result;
+  }
+
+  let s = original.replace(/,/g, '.').replace(/\s+/g, ' ').trim();
+  const hasDegree = /°/.test(s);
+
+  // Conformité pure : "C", "NC" ou "NA" seuls
+  if (/^c$/i.test(s)) {
+    result.type = 'conformity';
+    result.label = 'Conforme attendu';
+    return result;
+  }
+  if (/^(nc|na)$/i.test(s)) {
+    result.type = 'conformity';
+    result.label = s.toUpperCase() + ' attendu';
+    return result;
+  }
+
+  // Cas mixte du type "<0 = C" : on isole la partie numérique
+  let mixedHint = null;
+  if (s.includes('=')) {
+    const parts = s.split('=').map(p => p.trim()).filter(Boolean);
+    const cPart = parts.find(p => /^c$/i.test(p));
+    const otherPart = parts.find(p => !/^c$/i.test(p));
+    if (cPart && otherPart) { mixedHint = 'C'; s = otherPart; }
+  }
+
+  // Plage "A < var < B" (var = p, x, T, Δp, etc.)
+  let m = s.match(/^(-?\d+(?:\.\d+)?)\s*°?\s*(?:<=|<)\s*[^\d<>=]{1,8}?\s*(?:<=|<)\s*(-?\d+(?:\.\d+)?)\s*°?\s*([a-zA-Zµ%\/]*)$/);
+  if (m) {
+    result.min = parseFloat(m[1]);
+    result.max = parseFloat(m[2]);
+    result.unit = m[3] || (hasDegree ? '°' : '');
+    result.target = Math.round(((result.min + result.max) / 2) * 100) / 100;
+    result.label = `${result.min} à ${result.max}${result.unit ? ' ' + result.unit : ''}`;
+    if (mixedHint) result.label += ` (ou ${mixedHint})`;
+    return result;
+  }
+
+  // Inégalité simple : <, <=, >, >= + nombre + unité optionnelle collée
+  m = s.match(/^(<=|>=|<|>)\s*(-?\d+(?:\.\d+)?)\s*([a-zA-Zµ%°\/]*)$/);
+  if (m) {
+    const op = m[1], val = parseFloat(m[2]);
+    result.unit = m[3] || (hasDegree ? '°' : '');
+    if (op[0] === '<') result.max = val; else result.min = val;
+    result.label = `${op} ${val}${result.unit ? ' ' + result.unit : ''}`;
+    if (mixedHint) result.label += ` (ou ${mixedHint})`;
+    return result;
+  }
+
+  // Valeur ponctuelle simple (ex : "25", "25mm") — informative, sans seuil strict
+  m = s.match(/^(-?\d+(?:\.\d+)?)\s*([a-zA-Zµ%°\/]*)$/);
+  if (m) {
+    result.target = parseFloat(m[1]);
+    result.unit = m[2] || (hasDegree ? '°' : '');
+    result.label = `${result.target}${result.unit ? ' ' + result.unit : ''}`;
+    return result;
+  }
+
+  // Format non reconnu : affiché tel quel, aucune validation automatique
+  result.label = original;
+  return result;
+}
+
+/**
+ * Détection de type forcé en fonction du LIBELLÉ du point, indépendamment
+ * de la cible renseignée. Permet d'identifier automatiquement :
+ *  - les signatures électroniques (VISA ...)
+ *  - les champs de texte libre (Points de Vigilance, Commentaires...)
+ * Utilisé à l'import Excel ET disponible manuellement dans l'éditeur.
+ */
+function detectForcedType(name) {
+  const n = String(name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (/\bvisa\b/.test(n)) return 'signature';
+  if (/(vigilance|commentaire|observation|remarque)/.test(n)) return 'text';
+  return null;
+}
+
+/** Reconstruit un libellé lisible de cible à partir d'un point déjà enregistré */
+function formatTargetLabel(p) {
+  if (p.type === 'conformity') return 'Conforme attendu';
+  if (p.type === 'text') return 'Réponse libre (texte)';
+  if (p.type === 'signature') return 'Signature électronique requise';
+  const unit = p.unit ? ' ' + p.unit : '';
+  if (p.min !== null && p.min !== undefined && p.max !== null && p.max !== undefined) {
+    return `${p.min} à ${p.max}${unit}`;
+  }
+  if (p.max !== null && p.max !== undefined) return `< ${p.max}${unit}`;
+  if (p.min !== null && p.min !== undefined) return `> ${p.min}${unit}`;
+  if (p.target !== null && p.target !== undefined) return `${p.target}${unit}`;
+  return 'Libre (aucun seuil défini)';
+}
+
+/** Reconstruit une expression texte par défaut (pour pré-remplir l'éditeur) */
+function defaultTargetExprFromPoint(p) {
+  if (p.targetRaw) return p.targetRaw;
+  if (p.min !== null && p.min !== undefined && p.max !== null && p.max !== undefined) return `${p.min}<x<${p.max}`;
+  if (p.max !== null && p.max !== undefined) return `<${p.max}`;
+  if (p.min !== null && p.min !== undefined) return `>${p.min}`;
+  if (p.target !== null && p.target !== undefined) return `${p.target}`;
+  return '';
+}
+
+/** Détermine si un point a été renseigné, en fonction de son type */
+function isPointAnswered(point, r) {
+  switch (point.type) {
+    case 'numeric': return r.value !== '';
+    case 'text': return r.value !== undefined && r.value !== null && String(r.value).trim() !== '';
+    case 'signature': return r.status === 'SIGNED';
+    default: return r.status !== null; // conformity
+  }
+}
+
+
+/* --------------------------- 7. ACCUEIL / LISTE DES TOURNÉES ------------ */
+
+function renderHome() {
+  const grid = document.getElementById('home-tours-grid');
+  let inProgress = 0, done = 0, totalAlerts = 0;
+
+  state.tours.forEach(t => {
+    const s = state.sessions[t.id];
+    if (s) {
+      if (s.status === 'completed') done++; else inProgress++;
+      totalAlerts += Object.values(s.results).filter(r => r.alert).length;
+    }
+  });
+
+  document.getElementById('stat-total').textContent = state.tours.length;
+  document.getElementById('stat-progress').textContent = inProgress;
+  document.getElementById('stat-done').textContent = done;
+  document.getElementById('stat-alerts').textContent = totalAlerts;
+
+  if (state.tours.length === 0 && (state.folders || []).length === 0) {
+    grid.innerHTML = `
+      <div class="col-span-full text-center py-16 text-slate-400">
+        <i data-lucide="clipboard-list" class="w-10 h-10 mx-auto mb-3"></i>
+        <p class="font-medium">Aucune tournée pour le moment</p>
+        <p class="text-sm">Créez-en une ou importez un fichier Excel pour commencer.</p>
+      </div>`;
+    lucide.createIcons();
+    return;
+  }
+
+  const renderCard = tour => {
+    const session = state.sessions[tour.id];
+    const nbPoints = tour.points.length;
+    let progress = 0, statusLabel = 'Non démarrée', statusColor = 'slate';
+
+    if (session) {
+      const answered = tour.points.filter(p => isPointAnswered(p, session.results[p.id])).length;
+      progress = nbPoints ? Math.round((answered / nbPoints) * 100) : 0;
+      if (session.status === 'completed') { statusLabel = 'Terminée'; statusColor = 'green'; progress = 100; }
+      else { statusLabel = 'En cours'; statusColor = 'amber'; }
+    }
+
+    const alerts = session ? Object.values(session.results).filter(r => r.alert).length : 0;
+
+    let actionButtons;
+    if (!session) {
+      actionButtons = `
+        <button onclick="startTour('${tour.id}')" class="flex-1 bg-indigo-600 text-white text-sm font-medium py-2.5 rounded-xl hover:bg-indigo-700 flex items-center justify-center gap-1.5 active:scale-95 transition">
+          <i data-lucide="play" class="w-4 h-4"></i> Démarrer
+        </button>`;
+    } else if (session.status === 'completed') {
+      actionButtons = `
+        <button onclick="startTour('${tour.id}')" class="flex-1 bg-amber-500 text-white text-sm font-medium py-2.5 rounded-xl hover:bg-amber-600 flex items-center justify-center gap-1.5 active:scale-95 transition">
+          <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Nouveau relevé
+        </button>`;
+    } else {
+      actionButtons = `
+        <button onclick="startTour('${tour.id}')" class="flex-1 bg-indigo-600 text-white text-sm font-medium py-2.5 rounded-xl hover:bg-indigo-700 flex items-center justify-center gap-1.5 active:scale-95 transition">
+          <i data-lucide="play" class="w-4 h-4"></i> Continuer
+        </button>`;
+    }
+
+    return `
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col gap-4 hover:shadow-md transition-shadow">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <h3 class="font-semibold text-slate-800 truncate">${escapeHtml(tour.name)}</h3>
+            <p class="text-xs text-slate-400 mt-0.5">${nbPoints} point(s) de contrôle · ${(state.history[tour.id] || []).length} relevé(s) réalisé(s)</p>
+          </div>
+          <span class="flex-shrink-0 text-xs font-medium px-2.5 py-1 rounded-full bg-${statusColor}-100 text-${statusColor}-700">${statusLabel}</span>
+        </div>
+        <div>
+          <div class="flex justify-between text-xs text-slate-500 mb-1"><span>Progression</span><span>${progress}%</span></div>
+          <div class="w-full bg-slate-100 rounded-full h-2">
+            <div class="h-2 rounded-full bg-indigo-500 transition-all" style="width:${progress}%"></div>
+          </div>
+        </div>
+        ${alerts > 0 ? `<div class="flex items-center gap-1.5 text-xs text-red-600 font-medium"><i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> ${alerts} anomalie(s) détectée(s)</div>` : ''}
+        ${pendingVisaChip(tour.id)}
+        <div class="flex gap-2 pt-3 border-t border-slate-100">
+          ${actionButtons}
+          <button onclick="openMoveModal('${tour.id}')" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200" title="Déplacer dans un dossier">
+            <i data-lucide="folder-input" class="w-4 h-4"></i>
+          </button>
+          <button onclick="openDetail('${tour.id}')" class="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100" title="Historique & KPI">
+            <i data-lucide="history" class="w-4 h-4"></i>
+          </button>
+          <button onclick="openEditor('${tour.id}')" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200" title="Éditer la tournée">
+            <i data-lucide="pencil" class="w-4 h-4"></i>
+          </button>
+          <button onclick="confirmDeleteTour('${tour.id}')" class="p-2.5 rounded-xl bg-slate-100 hover:bg-red-100 hover:text-red-600" title="Supprimer">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>`;
+  };
+
+  // --- Regroupement par dossiers ---
+  const gridCls = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4';
+  const folders = state.folders || [];
+  let html = '';
+
+  folders.forEach(f => {
+    const ts = state.tours.filter(t => t.folderId === f.id);
+    const pending = ts.reduce((n, t) => n + pendingVisaCount(t.id), 0);
+    const content = f.collapsed ? '' : (ts.length
+      ? `<div class="${gridCls}">${ts.map(renderCard).join('')}</div>`
+      : `<div class="text-center text-sm text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200 py-6">Dossier vide — déplacez-y des tournées avec l'icône <i data-lucide="folder-input" class="w-4 h-4 inline align-text-bottom"></i> de leur carte.</div>`);
+    html += `
+      <div>
+        <div class="flex items-center gap-2 mb-3">
+          <button onclick="toggleFolder('${f.id}')" class="flex items-center gap-2 min-w-0 flex-1 text-left">
+            <i data-lucide="${f.collapsed ? 'chevron-right' : 'chevron-down'}" class="w-4 h-4 text-slate-400 flex-shrink-0"></i>
+            <i data-lucide="${f.collapsed ? 'folder' : 'folder-open'}" class="w-5 h-5 text-indigo-500 flex-shrink-0"></i>
+            <span class="font-semibold text-slate-700 truncate">${escapeHtml(f.name)}</span>
+            <span class="text-xs text-slate-400 flex-shrink-0">${ts.length} tournée(s)</span>
+            ${pending > 0 ? `<span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-shrink-0">${pending} à viser</span>` : ''}
+          </button>
+          <button onclick="renameFolder('${f.id}')" class="p-2 rounded-xl hover:bg-slate-100" title="Renommer le dossier"><i data-lucide="pencil" class="w-4 h-4 text-slate-500"></i></button>
+          <button onclick="confirmDeleteFolder('${f.id}')" class="p-2 rounded-xl hover:bg-red-100" title="Supprimer le dossier"><i data-lucide="trash-2" class="w-4 h-4 text-red-500"></i></button>
+        </div>
+        ${content}
+      </div>`;
+  });
+
+  const loose = state.tours.filter(t => !t.folderId || !folders.some(f => f.id === t.folderId));
+  if (loose.length) {
+    html += `
+      <div>
+        ${folders.length ? `<div class="flex items-center gap-2 mb-3"><i data-lucide="inbox" class="w-5 h-5 text-slate-400"></i><span class="font-semibold text-slate-700">Sans dossier</span><span class="text-xs text-slate-400">${loose.length} tournée(s)</span></div>` : ''}
+        <div class="${gridCls}">${loose.map(renderCard).join('')}</div>
+      </div>`;
+  }
+
+  grid.innerHTML = html;
+  lucide.createIcons();
+}
+
+function confirmDeleteTour(tourId) {
+  confirmAction("Supprimer définitivement cette tournée ainsi que son historique de relevés ?", () => {
+    state.tours = state.tours.filter(t => t.id !== tourId);
+    delete state.sessions[tourId];
+    delete state.history[tourId];
+    saveState();
+    renderHome();
+    toast('Tournée supprimée', 'success');
+  });
+}
+
+
+/* --------------------------- 8. ÉDITEUR DE TOURNÉE (CRUD) --------------- */
+
+function createNewTour() {
+  const tour = { id: genId(), name: 'Nouvelle tournée', description: '', createdAt: Date.now(), points: [] };
+  state.tours.push(tour);
+  saveState();
+  openEditor(tour.id);
+  toast('Tournée créée — ajoutez vos points de contrôle', 'success');
+}
+
+function openEditor(tourId) {
+  currentTourId = tourId;
+  showView('editor');
+}
+
+function renderEditor() {
+  const tour = getCurrentTour();
+  if (!tour) { showView('home'); return; }
+  document.getElementById('editor-tour-name').value = tour.name;
+  document.getElementById('editor-tour-desc').value = tour.description || '';
+  renderEditorPoints();
+}
+
+function updateTourMeta() {
+  const tour = getCurrentTour();
+  if (!tour) return;
+  tour.name = document.getElementById('editor-tour-name').value;
+  tour.description = document.getElementById('editor-tour-desc').value;
+  saveState();
+}
+
+function pointTypeLabel(p) {
+  if (p.type === 'numeric') return `Numérique${p.unit ? ' (' + escapeHtml(p.unit) + ')' : ''} — Cible : ${escapeHtml(formatTargetLabel(p))}`;
+  if (p.type === 'conformity') return 'Conformité — Conforme attendu';
+  if (p.type === 'text') return 'Texte libre (observation / commentaire)';
+  if (p.type === 'signature') return 'Signature électronique (VISA)';
+  return '';
+}
+
+function renderEditorPoints() {
+  const tour = getCurrentTour();
+  document.getElementById('editor-points-count').textContent = tour.points.length;
+  const list = document.getElementById('editor-points-list');
+
+  if (tour.points.length === 0) {
+    list.innerHTML = `
+      <div class="text-center py-10 text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
+        <i data-lucide="inbox" class="w-8 h-8 mx-auto mb-2"></i>
+        <p class="text-sm">Aucun point de contrôle. Ajoutez-en un pour commencer.</p>
+      </div>`;
+  } else {
+    list.innerHTML = tour.points.map((p, idx) => `
+      <div class="bg-white rounded-xl border border-slate-100 p-3 flex items-center gap-3 shadow-sm">
+        <div class="w-8 h-8 rounded-lg ${p.type === 'signature' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600'} flex items-center justify-center flex-shrink-0 text-xs font-bold">
+          ${p.type === 'signature' ? '<i data-lucide="pen-tool" class="w-3.5 h-3.5"></i>' : escapeHtml(p.number || String(idx + 1))}
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="font-medium text-slate-800 truncate">${escapeHtml(p.name)}</p>
+          <p class="text-xs text-slate-400 truncate">${pointTypeLabel(p)}</p>
+        </div>
+        <button onclick="openPointModal('${p.id}')" class="p-2 rounded-lg hover:bg-slate-100 flex-shrink-0"><i data-lucide="pencil" class="w-4 h-4 text-slate-500"></i></button>
+        <button onclick="deletePoint('${p.id}')" class="p-2 rounded-lg hover:bg-red-100 flex-shrink-0"><i data-lucide="trash-2" class="w-4 h-4 text-red-500"></i></button>
+      </div>
+    `).join('');
+  }
+  lucide.createIcons();
+}
+
+function openPointModal(pointId = null) {
+  const tour = getCurrentTour();
+  const point = pointId ? tour.points.find(p => p.id === pointId) : null;
+
+  openModal(`
+    <h3 class="text-lg font-bold mb-4 text-slate-800">${point ? 'Modifier le point' : 'Nouveau point de contrôle'}</h3>
+    <div class="space-y-3">
+      <div class="grid grid-cols-4 gap-3">
+        <div>
+          <label class="text-xs font-medium text-slate-500">N°</label>
+          <input id="pf-number" value="${point?.number ? escapeHtml(point.number) : ''}" class="w-full border border-slate-200 rounded-xl px-2 py-2.5 mt-1 text-center outline-none focus:ring-2 focus:ring-indigo-200" placeholder="1">
+        </div>
+        <div class="col-span-3">
+          <label class="text-xs font-medium text-slate-500">Désignation du point</label>
+          <input id="pf-name" value="${point ? escapeHtml(point.name) : ''}" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 mt-1 outline-none focus:ring-2 focus:ring-indigo-200" placeholder="Ex : Relever pression bouteille oxygène">
+        </div>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-slate-500">Type de contrôle</label>
+        <select id="pf-type" onchange="togglePointFields()" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 mt-1 bg-white focus:ring-2 focus:ring-indigo-200 outline-none">
+          <option value="numeric" ${!point || point.type === 'numeric' ? 'selected' : ''}>Numérique (valeur + seuils)</option>
+          <option value="conformity" ${point?.type === 'conformity' ? 'selected' : ''}>Conformité (C / NC / NA)</option>
+          <option value="text" ${point?.type === 'text' ? 'selected' : ''}>Texte libre (observation, commentaire...)</option>
+          <option value="signature" ${point?.type === 'signature' ? 'selected' : ''}>Signature électronique (VISA)</option>
+        </select>
+        <p id="pf-type-info" class="text-xs text-slate-400 mt-1.5"></p>
+      </div>
+      <div id="pf-numeric-fields" class="space-y-2">
+        <div>
+          <label class="text-xs font-medium text-slate-500">Cible (même format que votre fiche Excel)</label>
+          <input id="pf-target-expr" oninput="previewTargetExpr()" value="${point ? escapeHtml(defaultTargetExprFromPoint(point)) : ''}" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 mt-1 outline-none focus:ring-2 focus:ring-indigo-200 font-mono text-sm" placeholder="Ex : 10<p<200, <8.5, >2.5bar...">
+          <p id="pf-target-preview" class="text-xs text-indigo-600 mt-1.5 min-h-[1rem]"></p>
+        </div>
+        <details class="bg-slate-50 rounded-xl p-3">
+          <summary class="text-xs font-medium text-slate-500 cursor-pointer select-none">Réglage avancé (min / max / unité)</summary>
+          <div class="grid grid-cols-3 gap-2 mt-2.5">
+            <div>
+              <label class="text-xs text-slate-400">Min</label>
+              <input id="pf-min" type="number" step="any" value="${point?.min ?? ''}" class="w-full border border-slate-200 rounded-lg px-2 py-2 mt-1 text-sm outline-none focus:ring-2 focus:ring-indigo-200">
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">Max</label>
+              <input id="pf-max" type="number" step="any" value="${point?.max ?? ''}" class="w-full border border-slate-200 rounded-lg px-2 py-2 mt-1 text-sm outline-none focus:ring-2 focus:ring-indigo-200">
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">Unité</label>
+              <input id="pf-unit" value="${point?.unit ? escapeHtml(point.unit) : ''}" class="w-full border border-slate-200 rounded-lg px-2 py-2 mt-1 text-sm outline-none focus:ring-2 focus:ring-indigo-200">
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+    <div class="flex gap-2 mt-6">
+      <button onclick="closeModal()" class="flex-1 py-3 rounded-xl bg-slate-100 font-medium hover:bg-slate-200">Annuler</button>
+      <button onclick="savePoint(${point ? `'${point.id}'` : 'null'})" class="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700">Enregistrer</button>
+    </div>
+  `);
+  togglePointFields();
+  previewTargetExpr();
+}
+
+function togglePointFields() {
+  const type = document.getElementById('pf-type').value;
+  document.getElementById('pf-numeric-fields').classList.toggle('hidden', type !== 'numeric');
+
+  const infoTexts = {
+    numeric: '',
+    conformity: '',
+    text: 'Champ de saisie libre lors du passage (ex : observation, commentaire, point de vigilance).',
+    signature: "Lors du passage, l'opérateur saisira son nom puis validera. La signature sera alors horodatée et définitivement verrouillée (non modifiable)."
+  };
+  const info = document.getElementById('pf-type-info');
+  if (info) info.textContent = infoTexts[type] || '';
+}
+
+/** Analyse en direct la cible saisie et met à jour l'aperçu + les champs avancés */
+function previewTargetExpr() {
+  const exprInput = document.getElementById('pf-target-expr');
+  const preview = document.getElementById('pf-target-preview');
+  if (!exprInput) return;
+
+  const parsed = parseTargetExpression(exprInput.value);
+  const minInput = document.getElementById('pf-min');
+  const maxInput = document.getElementById('pf-max');
+  const unitInput = document.getElementById('pf-unit');
+
+  if (minInput) minInput.value = parsed.min ?? '';
+  if (maxInput) maxInput.value = parsed.max ?? '';
+  if (unitInput && parsed.unit) unitInput.value = parsed.unit;
+
+  if (preview) {
+    if (parsed.type === 'conformity') {
+      preview.textContent = '⚠️ Cette cible ressemble à une conformité (C). Pensez à sélectionner "Conformité" comme type si besoin.';
+      preview.className = 'text-xs text-amber-600 mt-1.5 min-h-[1rem]';
+    } else {
+      preview.textContent = '→ Interprété comme : ' + parsed.label;
+      preview.className = 'text-xs text-indigo-600 mt-1.5 min-h-[1rem]';
+    }
+  }
+}
+
+function savePoint(pointId) {
+  const tour = getCurrentTour();
+  const name = document.getElementById('pf-name').value.trim();
+  const type = document.getElementById('pf-type').value;
+  const numberVal = document.getElementById('pf-number').value.trim();
+
+  if (!name) { toast('La désignation du point est requise', 'error'); return; }
+
+  let pointData = { name, type, number: numberVal || null };
+
+  if (type === 'numeric') {
+    const targetExpr = document.getElementById('pf-target-expr').value.trim();
+    const parsed = parseTargetExpression(targetExpr);
+    const minField = document.getElementById('pf-min').value;
+    const maxField = document.getElementById('pf-max').value;
+    const unitField = document.getElementById('pf-unit').value.trim();
+
+    pointData.targetRaw = targetExpr;
+    pointData.unit = unitField || parsed.unit || '';
+    pointData.min = minField !== '' ? parseFloat(minField) : (parsed.min ?? null);
+    pointData.max = maxField !== '' ? parseFloat(maxField) : (parsed.max ?? null);
+    pointData.target = parsed.target ?? null;
+
+    if (pointData.min !== null && pointData.max !== null && pointData.min > pointData.max) {
+      toast('Le seuil min doit être inférieur ou égal au seuil max', 'error');
+      return;
+    }
+  } else if (type === 'conformity') {
+    pointData.targetRaw = 'C';
+    pointData.unit = ''; pointData.min = null; pointData.max = null; pointData.target = null;
+  } else if (type === 'text') {
+    pointData.targetRaw = 'Texte libre';
+    pointData.unit = ''; pointData.min = null; pointData.max = null; pointData.target = null;
+  } else if (type === 'signature') {
+    pointData.targetRaw = 'Signature électronique';
+    pointData.unit = ''; pointData.min = null; pointData.max = null; pointData.target = null;
+  }
+
+  if (pointId) {
+    const existing = tour.points.find(p => p.id === pointId);
+    Object.assign(existing, pointData);
+    toast('Point modifié', 'success');
+  } else {
+    pointData.id = genId();
+    tour.points.push(pointData);
+    toast('Point ajouté', 'success');
+  }
+
+  saveState();
+  closeModal();
+  renderEditorPoints();
+}
+
+function deletePoint(pointId) {
+  confirmAction('Supprimer ce point de contrôle ?', () => {
+    const tour = getCurrentTour();
+    tour.points = tour.points.filter(p => p.id !== pointId);
+    saveState();
+    renderEditorPoints();
+    toast('Point supprimé', 'success');
+  });
+}
+
+
+/* --------------------------- 9. IMPORT EXCEL ---------------------------- */
+
+async function handleExcelImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  try {
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'array' });
+
+    if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+      toast("Le fichier ne contient aucune feuille exploitable.", 'error');
+      return;
+    }
+
+    let importedCount = 0;
+    const importedIds = [];
+    const skippedSheets = [];
+
+    workbook.SheetNames.forEach(sheetName => {
+      const sheet = workbook.Sheets[sheetName];
+      const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
+
+      // 1) Tentative avec le format réel "Désignation + Cible" (zones multiples supportées)
+      let tours = parseSheetIntoTours(aoa, sheetName);
+
+      // 2) Repli : ancien format à colonnes nommées (désignation/type/min/max/unité séparés)
+      if (tours.length === 0) {
+        const legacyPoints = parseSheetToPointsLegacy(aoa);
+        if (legacyPoints.length > 0) {
+          tours = [{ id: genId(), name: sheetName.trim() || 'Zone importée', description: '', createdAt: Date.now(), points: legacyPoints }];
+        }
+      }
+
+      if (tours.length > 0) {
+        tours.forEach(t => {
+          t.description = t.description || `Importé depuis "${file.name}" (onglet "${sheetName}")`;
+          state.tours.push(t);
+          importedIds.push(t.id);
+        });
+        importedCount += tours.length;
+      } else {
+        skippedSheets.push(sheetName);
+      }
+    });
+
+    saveState();
+    renderHome();
+
+    if (importedCount > 0) {
+      toast(`${importedCount} tournée(s) importée(s) avec succès`, 'success');
+      if (importedIds.length >= 2) proposeFolderForImport(importedIds, file.name);
+      if (skippedSheets.length > 0) {
+        toast(`Feuilles ignorées (format non reconnu) : ${skippedSheets.join(', ')}`, 'warning');
+      }
+    } else {
+      toast("Aucune donnée exploitable trouvée dans ce fichier. Vérifiez la structure du classeur.", 'error');
+    }
+  } catch (err) {
+    console.error(err);
+    toast("Erreur lors de la lecture du fichier Excel. Le fichier est peut-être corrompu ou dans un format non supporté.", 'error');
+  } finally {
+    event.target.value = '';
+  }
+}
+
+/** Sépare un numéro d'ordre collé en début de désignation ("1 Relever...") */
+function splitNumberAndName(text) {
+  const s = String(text || '').trim();
+  const m = s.match(/^(\d{1,3})[\.\)\-\s]+(.+)$/);
+  if (m) return { number: m[1], name: m[2].trim() };
+  return { number: null, name: s };
+}
+
+/** Lignes d'en-tête générales / vides à ignorer lors du parcours de la feuille */
+const HEADER_EXACT_LABELS = [
+  'jour de passage', 'points de contrôle et/ou relevés', 'point de contrôle et/ou relevés',
+  'cible', 'points de contrôle', 'point de contrôle', 'relevés', 'points de contrôle et/ou relevé'
+];
+function isHeaderOrEmptyRow(row) {
+  const nonEmpty = row.map(c => String(c || '').trim()).filter(Boolean);
+  if (nonEmpty.length === 0) return true;
+  return nonEmpty.every(cell => HEADER_EXACT_LABELS.includes(cell.toLowerCase().replace(/\s+/g, ' ')));
+}
+
+/** Détecte une ligne d'en-tête de zone (ex : "ZONE A25 - Station CHRIST") */
+function isZoneHeaderRow(row) {
+  const joined = row.map(c => String(c || '').trim()).filter(Boolean).join(' - ');
+  if (!joined) return false;
+  return /^zone\b/i.test(joined) || /^secteur\b/i.test(joined);
+}
+
+/**
+ * Tente d'interpréter une ligne comme un point de contrôle :
+ * - 1ère cellule non vide = numéro (si purement numérique et colonne séparée) ou désignation
+ * - cellule non vide suivante = cible brute
+ * Applique ensuite la détection forcée de type (texte libre / signature).
+ */
+function tryParseDataRow(row) {
+  const cells = row.map(c => (c === undefined || c === null) ? '' : c);
+  const nonEmptyIdx = [];
+  cells.forEach((c, i) => { if (String(c).trim() !== '') nonEmptyIdx.push(i); });
+  if (nonEmptyIdx.length === 0) return null;
+
+  let ptr = 0;
+  let number = null;
+
+  const firstVal = String(cells[nonEmptyIdx[0]]).trim();
+  if (/^\d{1,3}$/.test(firstVal) && nonEmptyIdx.length >= 2) {
+    number = firstVal;
+    ptr = 1;
+  }
+
+  if (ptr >= nonEmptyIdx.length) return null;
+  const nameIdx = nonEmptyIdx[ptr];
+  let nameCellRaw = String(cells[nameIdx]).trim();
+
+  if (number === null) {
+    const split = splitNumberAndName(nameCellRaw);
+    number = split.number;
+    nameCellRaw = split.name;
+  }
+
+  if (!nameCellRaw) return null;
+
+  const targetPos = nonEmptyIdx.findIndex(i => i === nameIdx) + 1;
+  const targetIdx = nonEmptyIdx[targetPos];
+  const targetRaw = targetIdx !== undefined ? cells[targetIdx] : '';
+
+  const parsed = parseTargetExpression(targetRaw);
+
+  let type = parsed.type;
+  let unit = parsed.unit, target = parsed.target, min = parsed.min, max = parsed.max;
+  let targetRawFinal = parsed.targetRaw;
+
+  // Détection forcée : signature électronique / texte libre, prioritaire sur la cible
+  const forced = detectForcedType(nameCellRaw);
+  if (forced) {
+    type = forced;
+    unit = ''; target = null; min = null; max = null;
+    targetRawFinal = forced === 'signature' ? 'Signature électronique' : 'Texte libre';
+  }
+
+  return {
+    id: genId(),
+    number,
+    name: nameCellRaw,
+    type,
+    targetRaw: targetRawFinal,
+    unit,
+    target,
+    min,
+    max
+  };
+}
+
+/**
+ * Parcourt une feuille ligne par ligne, détecte les sections "ZONE ..." et
+ * construit une tournée par zone rencontrée (plusieurs zones possibles
+ * dans une même feuille Excel).
+ */
+function parseSheetIntoTours(aoa, fallbackName) {
+  const tours = [];
+  let currentZoneName = null;
+  let currentPoints = [];
+  let zoneFound = false;
+
+  function flush() {
+    if (currentZoneName && currentPoints.length > 0) {
+      tours.push({
+        id: genId(), name: currentZoneName, description: '',
+        createdAt: Date.now(), points: currentPoints
+      });
+    }
+    currentPoints = [];
+  }
+
+  for (let i = 0; i < aoa.length; i++) {
+    const row = aoa[i] || [];
+    if (isHeaderOrEmptyRow(row)) continue;
+
+    if (isZoneHeaderRow(row)) {
+      flush();
+      currentZoneName = row.map(c => String(c || '').trim()).filter(Boolean).join(' - ');
+      zoneFound = true;
+      continue;
+    }
+
+    const point = tryParseDataRow(row);
+    if (point) {
+      if (!zoneFound) currentZoneName = currentZoneName || fallbackName;
+      currentPoints.push(point);
+    }
+  }
+  flush();
+  return tours;
+}
+
+/**
+ * Repli : ancien format à colonnes nommées explicitement
+ * (désignation / type / cible / min / max / unité en colonnes séparées).
+ */
+function parseSheetToPointsLegacy(aoa) {
+  const points = [];
+  if (!aoa || aoa.length === 0) return points;
+
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+  const colKeywords = {
+    name:   ['point de controle', 'designation', 'libelle', 'description', 'point', 'parametre', 'organe'],
+    type:   ['type', 'nature'],
+    target: ['cible', 'valeur cible', 'consigne', 'valeur de reference'],
+    min:    ['min', 'seuil min', 'minimum', 'mini'],
+    max:    ['max', 'seuil max', 'maximum', 'maxi'],
+    unit:   ['unite', 'unit']
+  };
+
+  let headerRowIndex = -1;
+  let colMap = {};
+
+  for (let i = 0; i < Math.min(aoa.length, 10); i++) {
+    const row = (aoa[i] || []).map(norm);
+    const tempMap = {};
+    row.forEach((cell, idx) => {
+      for (const key in colKeywords) {
+        if (tempMap[key] !== undefined) continue;
+        if (colKeywords[key].some(kw => cell.includes(kw))) tempMap[key] = idx;
+      }
+    });
+    if (tempMap.name !== undefined && (tempMap.min !== undefined || tempMap.max !== undefined || tempMap.target !== undefined)) {
+      headerRowIndex = i;
+      colMap = tempMap;
+      break;
+    }
+  }
+
+  if (headerRowIndex === -1) return points; // pas de format legacy détecté
+
+  for (let i = headerRowIndex + 1; i < aoa.length; i++) {
+    const row = aoa[i];
+    if (!row || row.length === 0) continue;
+
+    const nameVal = row[colMap.name];
+    if (nameVal === undefined || String(nameVal).trim() === '') continue;
+
+    const typeRaw = colMap.type !== undefined ? norm(row[colMap.type]) : '';
+    const targetVal = colMap.target !== undefined ? row[colMap.target] : '';
+    const minVal = colMap.min !== undefined ? row[colMap.min] : '';
+    const maxVal = colMap.max !== undefined ? row[colMap.max] : '';
+    const unitVal = colMap.unit !== undefined ? row[colMap.unit] : '';
+
+    let type = 'numeric';
+    if (typeRaw.includes('conform') || typeRaw.includes('c/nc') ||
+        (!isNumeric(targetVal) && !isNumeric(minVal) && !isNumeric(maxVal) && String(targetVal).trim() !== '')) {
+      type = 'conformity';
+    }
+
+    const { number, name } = splitNumberAndName(String(nameVal).trim());
+    const point = { id: genId(), number, name, type };
+
+    if (type === 'numeric') {
+      point.unit = unitVal !== undefined ? String(unitVal).trim() : '';
+      point.target = isNumeric(targetVal) ? parseFloat(targetVal) : null;
+      point.min = isNumeric(minVal) ? parseFloat(minVal) : null;
+      point.max = isNumeric(maxVal) ? parseFloat(maxVal) : null;
+      point.targetRaw = defaultTargetExprFromPoint(point);
+    } else {
+      point.unit = ''; point.target = null; point.min = null; point.max = null;
+      point.targetRaw = 'C';
+    }
+
+    // Détection forcée : signature électronique / texte libre
+    const forced = detectForcedType(name);
+    if (forced) {
+      point.type = forced;
+      point.unit = ''; point.target = null; point.min = null; point.max = null;
+      point.targetRaw = forced === 'signature' ? 'Signature électronique' : 'Texte libre';
+    }
+
+    points.push(point);
+  }
+
+  return points;
+}
+
+
+/* --------------------------- 10. PASSAGE DE TOURNÉE ---------------------- */
+
+function emptyResult() { return { value: '', status: null, comment: '', photo: null, alert: false, signedAt: null }; }
+
+function createEmptySession(tour) {
+  return {
+    tourId: tour.id,
+    operator: '',
+    date: new Date().toISOString(),
+    status: 'in_progress',
+    completedAt: null,
+    results: Object.fromEntries(tour.points.map(p => [p.id, emptyResult()]))
+  };
+}
+
+function startTour(tourId) {
+  currentTourId = tourId;
+  const tour = state.tours.find(t => t.id === tourId);
+  const existing = state.sessions[tourId];
+
+  if (!existing || existing.status === 'completed') {
+    state.sessions[tourId] = createEmptySession(tour);
+  } else {
+    tour.points.forEach(p => { if (!existing.results[p.id]) existing.results[p.id] = emptyResult(); });
+  }
+
+  saveState();
+  showView('execution');
+  renderExecution();
+}
+
+function renderExecution() {
+  const tour = getCurrentTour();
+  const session = state.sessions[currentTourId];
+
+  document.getElementById('exec-tour-name').textContent = tour.name;
+  document.getElementById('exec-operator').value = session.operator || '';
+  document.getElementById('exec-date').value = (session.date || new Date().toISOString()).substring(0, 10);
+  document.getElementById('exec-points-list').innerHTML = tour.points.map(p => renderPointCard(p)).join('');
+
+  lucide.createIcons();
+  updateProgress();
+}
+
+function getAnsweredIcon(point, r) {
+  const answered = isPointAnswered(point, r);
+  if (!answered) return `<i data-lucide="circle" class="w-5 h-5 text-slate-300"></i>`;
+  if (r.alert) return `<i data-lucide="alert-triangle" class="w-5 h-5 text-red-500"></i>`;
+  if (point.type === 'signature') return `<i data-lucide="shield-check" class="w-5 h-5 text-green-500"></i>`;
+  return `<i data-lucide="check-circle-2" class="w-5 h-5 text-green-500"></i>`;
+}
+
+function renderPointCard(point) {
+  const session = state.sessions[currentTourId];
+  const r = session.results[point.id];
+  const cardBorder = r.alert ? 'border-red-300 ring-1 ring-red-100' : 'border-slate-100';
+  const numberBadge = point.number ? `<span class="text-slate-400 mr-1">${escapeHtml(point.number)}.</span>` : '';
+
+  let body;
+
+  if (point.type === 'numeric') {
+    const rangeText = 'Cible : ' + formatTargetLabel(point);
+    const inputClasses = r.alert
+      ? 'border-red-400 bg-red-50 text-red-700'
+      : 'border-slate-200 focus:border-indigo-400 text-slate-800';
+
+    body = `
+      <p class="text-xs text-slate-400 mt-0.5">${escapeHtml(rangeText)}</p>
+      <div class="mt-3 flex items-center gap-2">
+        <input id="input-${point.id}" type="number" step="any" inputmode="decimal" value="${r.value}"
+          oninput="updateNumericValue('${point.id}', this.value)"
+          class="flex-1 border-2 rounded-xl px-3 py-3 text-lg font-semibold text-center transition-colors outline-none ${inputClasses}"
+          placeholder="Valeur">
+        <span class="text-sm text-slate-400 font-medium w-14 text-left">${escapeHtml(point.unit || '')}</span>
+      </div>`;
+
+  } else if (point.type === 'conformity') {
+    body = `
+      <div class="flex gap-2 mt-3">
+        <button onclick="setConformity('${point.id}','C')" class="flex-1 py-3 rounded-xl font-bold border-2 transition-colors ${r.status === 'C' ? 'bg-green-500 text-white border-green-500' : 'border-slate-200 text-slate-400 hover:border-green-300'}">C</button>
+        <button onclick="setConformity('${point.id}','NC')" class="flex-1 py-3 rounded-xl font-bold border-2 transition-colors ${r.status === 'NC' ? 'bg-red-500 text-white border-red-500' : 'border-slate-200 text-slate-400 hover:border-red-300'}">NC</button>
+        <button onclick="setConformity('${point.id}','NA')" class="flex-1 py-3 rounded-xl font-bold border-2 transition-colors ${r.status === 'NA' ? 'bg-slate-400 text-white border-slate-400' : 'border-slate-200 text-slate-400 hover:border-slate-300'}">NA</button>
+      </div>`;
+
+  } else if (point.type === 'text') {
+    body = `
+      <p class="text-xs text-slate-400 mt-0.5">Réponse libre</p>
+      <textarea id="input-${point.id}" rows="2" oninput="updateTextValue('${point.id}', this.value)"
+        class="w-full mt-2 border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 resize-none transition-colors"
+        placeholder="Saisir un commentaire, une observation...">${escapeHtml(r.value)}</textarea>`;
+
+  } else if (point.type === 'signature') {
+    if (r.status === 'SIGNED') {
+      // Signature verrouillée : non modifiable, horodatage affiché
+      body = `
+        <div class="mt-3 bg-green-50 border-2 border-green-200 rounded-xl px-3.5 py-3 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-full bg-green-500 text-white flex items-center justify-center flex-shrink-0">
+            <i data-lucide="shield-check" class="w-5 h-5"></i>
+          </div>
+          <div class="min-w-0">
+            <p class="font-semibold text-green-800 truncate">${escapeHtml(r.value)}</p>
+            <p class="text-xs text-green-600">Signé électroniquement le ${formatDate(r.signedAt)}</p>
+          </div>
+        </div>`;
+    } else {
+      const canSign = r.value && r.value.trim() !== '';
+      body = `
+        <p class="text-xs text-slate-400 mt-0.5">Signature électronique requise</p>
+        <div class="mt-2 space-y-2">
+          <input id="input-${point.id}" type="text" value="${escapeHtml(r.value)}"
+            oninput="updateTextValue('${point.id}', this.value)"
+            class="w-full border-2 border-slate-200 rounded-xl px-3 py-3 text-sm font-medium outline-none focus:border-indigo-400 transition-colors"
+            placeholder="Nom et prénom du signataire">
+          <button id="sign-btn-${point.id}" onclick="confirmSignature('${point.id}')" ${canSign ? '' : 'disabled'}
+            class="w-full py-3 rounded-xl bg-indigo-600 text-white font-semibold flex items-center justify-center gap-2 hover:bg-indigo-700 active:scale-[0.98] transition disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">
+            <i data-lucide="pen-tool" class="w-4 h-4"></i> Valider la signature
+          </button>
+        </div>`;
+    }
+  }
+
+  const alertSection = (point.type === 'numeric' || point.type === 'conformity') ? `
+    <div id="alert-section-${point.id}" class="mt-3 pt-3 border-t border-red-100 space-y-2 ${r.alert ? '' : 'hidden'}">
+      <div class="flex items-center gap-1.5 text-xs font-semibold text-red-600">
+        <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> Anomalie — merci de commenter
+      </div>
+      <textarea oninput="updateComment('${point.id}', this.value)" placeholder="Décrire l'anomalie, action corrective engagée..."
+        class="w-full text-sm border border-red-200 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-red-200 resize-none" rows="2">${escapeHtml(r.comment || '')}</textarea>
+      <div class="flex items-center gap-2 flex-wrap">
+        <label class="cursor-pointer flex items-center gap-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 px-3 py-2.5 rounded-xl transition-colors">
+          <i data-lucide="camera" class="w-4 h-4"></i> Photo
+          <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoUpload('${point.id}', this)">
+        </label>
+        ${r.photo ? `<img src="${r.photo}" class="w-14 h-14 object-cover rounded-lg border border-slate-200 cursor-pointer" onclick="viewPhoto('${r.photo}')">` : ''}
+        ${r.photo ? `<button onclick="removePhoto('${point.id}')" class="text-xs text-red-500 font-medium hover:underline">Supprimer</button>` : ''}
+      </div>
+    </div>` : '';
+
+  return `
+    <div id="point-card-${point.id}" class="bg-white rounded-2xl shadow-sm border ${cardBorder} p-4 transition-colors">
+      <div class="flex items-start justify-between gap-2">
+        <p class="font-medium text-slate-800 leading-snug">${numberBadge}${escapeHtml(point.name)}</p>
+        <span class="flex-shrink-0 mt-0.5">${getAnsweredIcon(point, r)}</span>
+      </div>
+      ${body}
+      ${alertSection}
+    </div>`;
+}
+
+function refreshPointCard(pointId) {
+  const tour = getCurrentTour();
+  const point = tour.points.find(p => p.id === pointId);
+  const el = document.getElementById('point-card-' + pointId);
+  if (el) { el.outerHTML = renderPointCard(point); lucide.createIcons(); }
+}
+
+function updateNumericValue(pointId, rawValue) {
+  const tour = getCurrentTour();
+  const point = tour.points.find(p => p.id === pointId);
+  const session = state.sessions[currentTourId];
+  const r = session.results[pointId];
+
+  r.value = rawValue;
+  const num = parseFloat(rawValue);
+  let alert = false;
+
+  if (rawValue !== '' && !isNaN(num)) {
+    if (point.min !== null && point.min !== undefined && num < point.min) alert = true;
+    if (point.max !== null && point.max !== undefined && num > point.max) alert = true;
+  }
+  r.alert = alert;
+  saveState();
+
+  const input = document.getElementById('input-' + pointId);
+  input.classList.toggle('border-red-400', alert);
+  input.classList.toggle('bg-red-50', alert);
+  input.classList.toggle('text-red-700', alert);
+  input.classList.toggle('border-slate-200', !alert);
+
+  const card = document.getElementById('point-card-' + pointId);
+  card.classList.toggle('border-red-300', alert);
+  card.classList.toggle('ring-1', alert);
+  card.classList.toggle('ring-red-100', alert);
+  card.classList.toggle('border-slate-100', !alert);
+
+  const alertSection = document.getElementById('alert-section-' + pointId);
+  if (alertSection) alertSection.classList.toggle('hidden', !alert);
+
+  const iconSpan = card.querySelector('span.flex-shrink-0');
+  if (iconSpan) { iconSpan.innerHTML = getAnsweredIcon(point, r); lucide.createIcons(); }
+
+  updateProgress();
+}
+
+/** Saisie pour les champs de texte libre ET pour le nom du signataire (avant validation) */
+function updateTextValue(pointId, value) {
+  const tour = getCurrentTour();
+  const point = tour.points.find(p => p.id === pointId);
+  const session = state.sessions[currentTourId];
+  const r = session.results[pointId];
+
+  r.value = value;
+  saveState();
+
+  // Active/désactive le bouton de signature en direct
+  if (point.type === 'signature') {
+    const btn = document.getElementById('sign-btn-' + pointId);
+    if (btn) btn.disabled = !value || value.trim() === '';
+  }
+
+  const card = document.getElementById('point-card-' + pointId);
+  if (card) {
+    const iconSpan = card.querySelector('span.flex-shrink-0');
+    if (iconSpan) { iconSpan.innerHTML = getAnsweredIcon(point, r); lucide.createIcons(); }
+  }
+
+  updateProgress();
+}
+
+function updateComment(pointId, value) {
+  state.sessions[currentTourId].results[pointId].comment = value;
+  saveState();
+}
+
+function setConformity(pointId, status) {
+  const session = state.sessions[currentTourId];
+  const r = session.results[pointId];
+  r.status = status;
+  r.alert = status === 'NC';
+  saveState();
+  refreshPointCard(pointId);
+  updateProgress();
+}
+
+/** Valide définitivement une signature électronique (irréversible, horodatée) */
+function confirmSignature(pointId) {
+  const session = state.sessions[currentTourId];
+  const r = session.results[pointId];
+
+  if (!r.value || !r.value.trim()) {
+    toast('Veuillez saisir un nom avant de signer', 'error');
+    return;
+  }
+
+  confirmAction(
+    `Confirmer la signature électronique de « ${r.value.trim()} » ? Cette action est définitive, horodatée, et ne pourra plus être modifiée.`,
+    () => {
+      r.status = 'SIGNED';
+      r.signedAt = new Date().toISOString();
+      r.alert = false;
+      saveState();
+      refreshPointCard(pointId);
+      updateProgress();
+      toast('Signature validée et horodatée', 'success');
+    },
+    'Signer'
+  );
+}
+
+function handlePhotoUpload(pointId, inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 800;
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+
+      state.sessions[currentTourId].results[pointId].photo = dataUrl;
+      saveState();
+      refreshPointCard(pointId);
+      toast('Photo ajoutée', 'success');
+    };
+    img.onerror = () => toast("Impossible de traiter cette image", 'error');
+    img.src = e.target.result;
+  };
+  reader.onerror = () => toast("Erreur de lecture du fichier image", 'error');
+  reader.readAsDataURL(file);
+  inputEl.value = '';
+}
+
+function removePhoto(pointId) {
+  state.sessions[currentTourId].results[pointId].photo = null;
+  saveState();
+  refreshPointCard(pointId);
+}
+
+function updateOperator() {
+  state.sessions[currentTourId].operator = document.getElementById('exec-operator').value;
+  saveState();
+}
+
+function updateSessionDate() {
+  const val = document.getElementById('exec-date').value;
+  if (val) {
+    state.sessions[currentTourId].date = new Date(val).toISOString();
+    saveState();
+  }
+}
+
+function updateProgress() {
+  const tour = getCurrentTour();
+  const session = state.sessions[currentTourId];
+  const total = tour.points.length;
+
+  const answered = tour.points.filter(p => isPointAnswered(p, session.results[p.id])).length;
+
+  const pct = total ? Math.round((answered / total) * 100) : 0;
+  document.getElementById('exec-progress-bar').style.width = pct + '%';
+  document.getElementById('exec-progress-text').textContent = `${pct}% (${answered}/${total})`;
+}
+
+function finishTour() {
+  const session = state.sessions[currentTourId];
+
+  if (!session.operator || !session.operator.trim()) {
+    toast("Merci de renseigner le nom de l'opérateur avant de terminer", 'error');
+    document.getElementById('exec-operator').focus();
+    return;
+  }
+
+  session.status = 'completed';
+  session.completedAt = new Date().toISOString();
+  if (!session.archivedId) archiveSession(getCurrentTour(), session);   // alimente l'historique
+  saveState();
+  openReportModal();
+}
+
+function openReportModal() {
+  const tour = getCurrentTour();
+  const session = state.sessions[currentTourId];
+  const alerts = tour.points.filter(p => session.results[p.id].alert).length;
+
+  openModal(`
+    <div class="text-center">
+      <div class="w-14 h-14 rounded-full bg-green-100 text-green-600 flex items-center justify-center mx-auto mb-4">
+        <i data-lucide="check-circle-2" class="w-7 h-7"></i>
+      </div>
+      <h3 class="text-lg font-bold mb-1 text-slate-800">Tournée terminée !</h3>
+      <p class="text-sm text-slate-500 mb-5">
+        ${tour.points.length} points contrôlés
+        ${alerts > 0 ? `, <span class="text-red-600 font-semibold">${alerts} anomalie(s)</span>` : ', aucune anomalie'}
+      </p>
+      <div class="flex flex-col gap-2">
+        <button onclick="generatePDF()" class="w-full py-3.5 rounded-xl bg-indigo-600 text-white font-semibold flex items-center justify-center gap-2 hover:bg-indigo-700">
+          <i data-lucide="file-down" class="w-4 h-4"></i> Générer le rapport PDF
+        </button>
+        <button onclick="openManagerVisa(getHistory(currentTourId).slice(-1)[0].id)" class="w-full py-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 font-semibold flex items-center justify-center gap-2 hover:bg-amber-100">
+          <i data-lucide="pen-tool" class="w-4 h-4"></i> Visa du manager
+        </button>
+        <button onclick="closeModal(); openDetail(currentTourId, 'kpi');" class="w-full py-3.5 rounded-xl bg-indigo-50 text-indigo-700 font-semibold flex items-center justify-center gap-2 hover:bg-indigo-100">
+          <i data-lucide="gauge" class="w-4 h-4"></i> Voir l'historique & les KPI
+        </button>
+        <button onclick="closeModal(); showView('home');" class="w-full py-3.5 rounded-xl bg-slate-100 font-medium hover:bg-slate-200">Retour à l'accueil</button>
+      </div>
+    </div>
+  `);
+}
+
+function viewLastReport(tourId) {
+  currentTourId = tourId;
+  const hist = getHistory(tourId);
+  const last = hist[hist.length - 1];
+  if (last) {
+    buildPrintArea({ name: last.tourName || getCurrentTour().name, points: last.points }, last);
+  } else {
+    buildPrintArea();
+  }
+  setTimeout(() => window.print(), 150);
+}
+
+
+/* --------------------------- 11. EXPORT PDF (impression) ---------------- */
+
+function buildPrintArea(tourArg, sessionArg) {
+  const tour = tourArg || getCurrentTour();
+  const session = sessionArg || state.sessions[currentTourId];
+  const alertPoints = tour.points.filter(p => session.results[p.id].alert);
+
+  const rows = tour.points.map(p => {
+    const r = session.results[p.id];
+    let valueDisplay, statusDisplay, statusStyle = '';
+
+    if (p.type === 'numeric') {
+      valueDisplay = r.value !== '' ? `${r.value} ${p.unit || ''}` : '—';
+      statusDisplay = r.value === '' ? 'Non relevé' : (r.alert ? 'ALERTE' : 'OK');
+      if (r.alert) statusStyle = 'color:#dc2626;font-weight:700;';
+    } else if (p.type === 'conformity') {
+      valueDisplay = r.status || '—';
+      statusDisplay = r.status === 'NC' ? 'NON CONFORME' : r.status === 'C' ? 'Conforme' : r.status === 'NA' ? 'N/A' : 'Non relevé';
+      if (r.alert) statusStyle = 'color:#dc2626;font-weight:700;';
+    } else if (p.type === 'text') {
+      valueDisplay = r.value && r.value.trim() !== '' ? r.value : '—';
+      statusDisplay = r.value && r.value.trim() !== '' ? 'Renseigné' : 'Non renseigné';
+    } else if (p.type === 'signature') {
+      valueDisplay = r.status === 'SIGNED' ? `${r.value} — signé le ${formatDate(r.signedAt)}` : '—';
+      statusDisplay = r.status === 'SIGNED' ? 'SIGNÉ' : 'Non signé';
+      if (r.status !== 'SIGNED') statusStyle = 'color:#d97706;font-weight:700;';
+    }
+
+    return `<tr>
+      <td style="padding:7px;border:1px solid #e2e8f0;">${p.number ? escapeHtml(p.number) + '. ' : ''}${escapeHtml(p.name)}</td>
+      <td style="padding:7px;border:1px solid #e2e8f0;text-align:center;">${escapeHtml(formatTargetLabel(p))}</td>
+      <td style="padding:7px;border:1px solid #e2e8f0;text-align:center;">${escapeHtml(String(valueDisplay))}</td>
+      <td style="padding:7px;border:1px solid #e2e8f0;text-align:center;${statusStyle}">${statusDisplay}</td>
+      <td style="padding:7px;border:1px solid #e2e8f0;">${escapeHtml(r.comment || '')}</td>
+    </tr>`;
+  }).join('');
+
+  const photosHtml = alertPoints.filter(p => session.results[p.id].photo).map(p => {
+    const r = session.results[p.id];
+    return `<div style="display:inline-block;margin:8px;text-align:center;vertical-align:top;">
+      <img src="${r.photo}" style="width:200px;height:150px;object-fit:cover;border:1px solid #cbd5e1;border-radius:8px;">
+      <p style="font-size:11px;margin-top:4px;max-width:200px;">${escapeHtml(p.name)}</p>
+    </div>`;
+  }).join('');
+
+  document.getElementById('print-area').innerHTML = `
+    <div style="font-family: Arial, Helvetica, sans-serif; padding:24px; color:#1e293b;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #4f46e5;padding-bottom:14px;margin-bottom:18px;">
+        <div>
+          <h1 style="font-size:22px;margin:0;">Rapport d'Inspection</h1>
+          <p style="margin:4px 0 0;color:#64748b;">${escapeHtml(tour.name)}</p>
+        </div>
+        <div style="text-align:right;font-size:12px;color:#64748b;">
+          <p style="margin:0;">Date : ${formatDate(session.date)}</p>
+          <p style="margin:0;">Opérateur : ${escapeHtml(session.operator || '—')}</p>
+          <p style="margin:0;">Statut : ${session.status === 'completed' ? 'Terminée' : 'En cours'}</p>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:24px;margin-bottom:18px;font-size:13px;">
+        <div><strong>${tour.points.length}</strong> points contrôlés</div>
+        <div style="color:${alertPoints.length ? '#dc2626' : '#16a34a'};"><strong>${alertPoints.length}</strong> anomalie(s)</div>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr style="background:#f1f5f9;">
+            <th style="padding:7px;border:1px solid #e2e8f0;text-align:left;">Point de contrôle</th>
+            <th style="padding:7px;border:1px solid #e2e8f0;">Cible</th>
+            <th style="padding:7px;border:1px solid #e2e8f0;">Valeur relevée</th>
+            <th style="padding:7px;border:1px solid #e2e8f0;">Statut</th>
+            <th style="padding:7px;border:1px solid #e2e8f0;text-align:left;">Commentaire</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+
+      ${photosHtml ? `<h3 style="margin-top:28px;font-size:15px;">Photos des anomalies</h3><div>${photosHtml}</div>` : ''}
+
+      ${session.status === 'completed' ? (session.managerVisa
+        ? `<div style="margin-top:28px;border:2px solid #16a34a;border-radius:8px;padding:12px 16px;font-size:12px;">
+             <strong style="color:#166534;">Visa manager : ${escapeHtml(session.managerVisa.name)}</strong><br>
+             Signé électroniquement le ${formatDate(session.managerVisa.signedAt)}
+             ${session.managerVisa.comment ? `<br>Commentaire : ${escapeHtml(session.managerVisa.comment)}` : ''}
+           </div>`
+        : `<div style="margin-top:28px;border:2px dashed #d97706;border-radius:8px;padding:12px 16px;font-size:12px;color:#b45309;"><strong>Visa manager :</strong> en attente de signature</div>`) : ''}
+
+      <p style="margin-top:36px;font-size:11px;color:#94a3b8;">Rapport généré le ${formatDate(new Date().toISOString())} via InspecTour</p>
+    </div>`;
+}
+
+function generatePDF() {
+  const hist = getHistory(currentTourId);
+  const last = hist[hist.length - 1];
+  if (last) buildPrintArea({ name: last.tourName || getCurrentTour().name, points: last.points }, last);
+  else buildPrintArea();
+  closeModal();
+  setTimeout(() => window.print(), 150);
+}
+
+
+/* --------------------------- 11b. HISTORIQUE & KPI ---------------------- */
+
+let detailTab = 'history';
+let detailPeriod = 'all';
+let detailPointId = '';
+
+/** Archive un relevé terminé (copie figée des points + résultats) dans l'historique de la tournée */
+function archiveSession(tour, session) {
+  if (!state.history) state.history = {};
+  if (!state.history[tour.id]) state.history[tour.id] = [];
+  const entry = {
+    id: genId(),
+    tourId: tour.id,
+    tourName: tour.name,
+    status: 'completed',
+    operator: session.operator || '',
+    date: session.date,
+    completedAt: session.completedAt || new Date().toISOString(),
+    points: JSON.parse(JSON.stringify(tour.points)),
+    results: JSON.parse(JSON.stringify(session.results))
+  };
+  state.history[tour.id].push(entry);
+  session.archivedId = entry.id;
+  // Les photos sont conservées uniquement dans l'historique (évite de doubler le stockage)
+  Object.values(session.results).forEach(r => { r.photo = null; });
+  return entry;
+}
+
+function getHistory(tourId) {
+  return (state.history[tourId] || []).slice()
+    .sort((a, b) => new Date(a.completedAt || a.date) - new Date(b.completedAt || b.date));
+}
+
+function findEntry(id) {
+  return (state.history[currentTourId] || []).find(e => e.id === id);
+}
+
+function openDetail(tourId, tab) {
+  currentTourId = tourId;
+  detailTab = tab || 'history';
+  detailPointId = '';
+  showView('detail');
+}
+
+function setDetailTab(tab) { detailTab = tab; renderDetail(); }
+function setDetailPeriod(v) { detailPeriod = v; detailPointId = ''; renderDetail(); }
+function setDetailPoint(v) { detailPointId = v; renderDetail(); }
+
+/** Calcule les indicateurs d'un relevé archivé */
+function evalEntry(e) {
+  const total = e.points.length;
+  let answered = 0, ok = 0, nok = 0, anomalies = 0, sigTotal = 0, sigDone = 0;
+  e.points.forEach(p => {
+    const r = e.results[p.id] || emptyResult();
+    if (isPointAnswered(p, r)) answered++;
+    if (p.type === 'signature') { sigTotal++; if (r.status === 'SIGNED') sigDone++; }
+    if (p.type === 'numeric') {
+      const hasThreshold = (p.min !== null && p.min !== undefined) || (p.max !== null && p.max !== undefined);
+      if (hasThreshold && r.value !== '') { if (r.alert) nok++; else ok++; }
+    } else if (p.type === 'conformity') {
+      if (r.status === 'C') ok++; else if (r.status === 'NC') nok++;
+    }
+    if (r.alert) anomalies++;
+  });
+  return {
+    total, answered, ok, nok, anomalies, sigTotal, sigDone,
+    exec: total ? (answered / total) * 100 : 0,
+    conf: (ok + nok) > 0 ? (ok / (ok + nok)) * 100 : null
+  };
+}
+
+function pctText(v) { return (v === null || v === undefined || isNaN(v)) ? '—' : Math.round(v) + ' %'; }
+function rateColor(v) {
+  if (v === null || v === undefined) return 'text-slate-400';
+  if (v >= 95) return 'text-green-600';
+  if (v >= 80) return 'text-amber-500';
+  return 'text-red-500';
+}
+function shortDate(iso) {
+  return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+}
+
+function renderDetail() {
+  const tour = getCurrentTour();
+  if (!tour) { showView('home'); return; }
+  const hist = getHistory(tour.id);
+
+  document.getElementById('detail-tour-name').textContent = tour.name;
+  document.getElementById('detail-tour-meta').textContent =
+    `${hist.length} relevé(s) réalisé(s) · ${tour.points.length} point(s) de contrôle`;
+
+  const active = 'bg-white text-indigo-600 shadow-sm';
+  const inactive = 'text-slate-500 hover:text-slate-700';
+  ['history', 'kpi'].forEach(t => {
+    document.getElementById('tab-btn-' + t).className =
+      'flex-1 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5 transition ' +
+      (detailTab === t ? active : inactive);
+  });
+
+  document.getElementById('detail-content').innerHTML =
+    detailTab === 'history' ? renderHistoryTab(tour, hist) : renderKpiTab(tour, hist);
+  lucide.createIcons();
+}
+
+/* ---- Onglet Historique ---- */
+
+function renderHistoryTab(tour, hist) {
+  if (hist.length === 0) {
+    return `
+      <div class="text-center py-14 text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
+        <i data-lucide="history" class="w-9 h-9 mx-auto mb-3"></i>
+        <p class="font-medium">Aucun relevé réalisé pour le moment</p>
+        <p class="text-sm">Chaque tournée terminée apparaîtra ici automatiquement.</p>
+      </div>`;
+  }
+
+  const cards = hist.slice().reverse().map(e => {
+    const s = evalEntry(e);
+    return `
+      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <p class="font-semibold text-slate-800">${formatDate(e.completedAt || e.date)}</p>
+            <p class="text-xs text-slate-400 mt-0.5">Opérateur : ${escapeHtml(e.operator || '—')}</p>
+          </div>
+          ${s.anomalies > 0
+            ? `<span class="flex-shrink-0 text-xs font-medium px-2.5 py-1 rounded-full bg-red-100 text-red-700">${s.anomalies} anomalie(s)</span>`
+            : `<span class="flex-shrink-0 text-xs font-medium px-2.5 py-1 rounded-full bg-green-100 text-green-700">Aucune anomalie</span>`}
+        </div>
+        <div class="grid grid-cols-3 gap-2 mt-3 text-center">
+          <div class="bg-slate-50 rounded-xl py-2"><p class="text-[11px] text-slate-400">Exécution</p><p class="font-bold ${rateColor(s.exec)}">${pctText(s.exec)}</p></div>
+          <div class="bg-slate-50 rounded-xl py-2"><p class="text-[11px] text-slate-400">Conformité</p><p class="font-bold ${rateColor(s.conf)}">${pctText(s.conf)}</p></div>
+          <div class="bg-slate-50 rounded-xl py-2"><p class="text-[11px] text-slate-400">Points</p><p class="font-bold text-slate-700">${s.answered}/${s.total}</p></div>
+        </div>
+        ${visaBlock(e)}
+        <div class="flex gap-2 mt-3 pt-3 border-t border-slate-100">
+          <button onclick="viewEntry('${e.id}')" class="flex-1 text-sm font-medium py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center gap-1.5">
+            <i data-lucide="eye" class="w-4 h-4"></i> Détail
+          </button>
+          <button onclick="printEntry('${e.id}')" class="flex-1 text-sm font-medium py-2.5 rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center justify-center gap-1.5">
+            <i data-lucide="file-down" class="w-4 h-4"></i> PDF
+          </button>
+          <button onclick="deleteEntry('${e.id}')" class="p-2.5 rounded-xl bg-slate-100 hover:bg-red-100 hover:text-red-600" title="Supprimer ce relevé">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="flex justify-end mb-3">
+      <button onclick="exportHistoryExcel()" class="text-sm font-medium px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 flex items-center gap-1.5 active:scale-95 transition">
+        <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Exporter en Excel
+      </button>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">${cards}</div>`;
+}
+
+function resultSummary(p, r) {
+  if (p.type === 'numeric') return { text: r.value !== '' ? `${r.value}${p.unit ? ' ' + p.unit : ''}` : '—', bad: !!r.alert };
+  if (p.type === 'conformity') return { text: r.status || '—', bad: r.status === 'NC' };
+  if (p.type === 'text') return { text: (r.value && String(r.value).trim()) ? r.value : '—', bad: false };
+  return { text: r.status === 'SIGNED' ? `${r.value} (signé le ${formatDate(r.signedAt)})` : 'Non signé', bad: r.status !== 'SIGNED' };
+}
+
+function viewEntry(entryId) {
+  const e = findEntry(entryId);
+  if (!e) return;
+  const s = evalEntry(e);
+  const items = e.points.map(p => {
+    const r = e.results[p.id] || emptyResult();
+    const sum = resultSummary(p, r);
+    return `
+      <div class="py-2.5 border-b border-slate-100 last:border-0">
+        <p class="text-sm font-medium text-slate-800">${p.number ? escapeHtml(p.number) + '. ' : ''}${escapeHtml(p.name)}</p>
+        <div class="flex justify-between gap-3 text-xs mt-0.5">
+          <span class="text-slate-400">${escapeHtml(formatTargetLabel(p))}</span>
+          <span class="font-semibold text-right ${sum.bad ? 'text-red-600' : 'text-slate-700'}">${escapeHtml(sum.text)}</span>
+        </div>
+        ${r.comment ? `<p class="text-xs text-red-600 mt-1">${escapeHtml(r.comment)}</p>` : ''}
+      </div>`;
+  }).join('');
+
+  openModal(`
+    <h3 class="text-lg font-bold text-slate-800">Relevé du ${formatDate(e.completedAt || e.date)}</h3>
+    <p class="text-xs text-slate-400 mb-3">Opérateur : ${escapeHtml(e.operator || '—')} · Exécution ${pctText(s.exec)} · Conformité ${pctText(s.conf)}</p>
+    <div class="max-h-[50vh] overflow-y-auto pr-1">${items}</div>
+    ${visaBlock(e)}
+    <div class="flex gap-2 mt-4">
+      <button onclick="closeModal()" class="flex-1 py-3 rounded-xl bg-slate-100 font-medium hover:bg-slate-200">Fermer</button>
+      <button onclick="closeModal(); printEntry('${e.id}')" class="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700">Rapport PDF</button>
+    </div>`);
+}
+
+function printEntry(entryId) {
+  const e = findEntry(entryId);
+  if (!e) return;
+  buildPrintArea({ name: e.tourName || getCurrentTour().name, points: e.points }, e);
+  setTimeout(() => window.print(), 150);
+}
+
+function deleteEntry(entryId) {
+  confirmAction('Supprimer définitivement ce relevé de l\'historique ?', () => {
+    state.history[currentTourId] = (state.history[currentTourId] || []).filter(e => e.id !== entryId);
+    saveState();
+    renderDetail();
+    toast('Relevé supprimé', 'success');
+  });
+}
+
+function exportHistoryExcel() {
+  const tour = getCurrentTour();
+  const hist = getHistory(tour.id);
+  if (!hist.length) { toast('Aucun relevé à exporter', 'warning'); return; }
+
+  const sum = [['Date', 'Opérateur', "Taux d'exécution (%)", 'Taux de conformité (%)', 'Anomalies', 'Points renseignés', 'Total points', 'Visa manager', 'Date du visa']];
+  const det = [['Date', 'Opérateur', 'N°', 'Point de contrôle', 'Cible', 'Valeur / statut', 'État', 'Commentaire']];
+
+  hist.forEach(e => {
+    const s = evalEntry(e);
+    const d = formatDate(e.completedAt || e.date);
+    sum.push([d, e.operator || '', Math.round(s.exec), s.conf === null ? '' : Math.round(s.conf), s.anomalies, s.answered, s.total,
+      e.managerVisa ? e.managerVisa.name : '', e.managerVisa ? formatDate(e.managerVisa.signedAt) : '']);
+    e.points.forEach(p => {
+      const r = e.results[p.id] || emptyResult();
+      const rs = resultSummary(p, r);
+      const hasState = p.type === 'numeric' || p.type === 'conformity';
+      det.push([d, e.operator || '', p.number || '', p.name, formatTargetLabel(p), rs.text,
+        hasState ? (rs.bad ? 'Anomalie' : 'OK') : '', r.comment || '']);
+    });
+  });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), 'Synthèse');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(det), 'Détail');
+  XLSX.writeFile(wb, 'Historique_' + tour.name.replace(/[^\w\-]+/g, '_') + '.xlsx');
+  toast('Export Excel généré', 'success');
+}
+
+/* ---- Onglet KPI ---- */
+
+function filterByPeriod(hist) {
+  if (detailPeriod === 'all') return hist;
+  if (detailPeriod === 'last10') return hist.slice(-10);
+  const limit = Date.now() - parseInt(detailPeriod, 10) * 86400000;
+  return hist.filter(e => new Date(e.completedAt || e.date).getTime() >= limit);
+}
+
+function kpiCard(label, value, sub, colorClass) {
+  return `
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+      <p class="text-xs text-slate-400 mb-1">${label}</p>
+      <p class="text-2xl font-bold ${colorClass}">${value}</p>
+      <p class="text-[11px] text-slate-400 mt-1">${sub}</p>
+    </div>`;
+}
+
+function renderKpiTab(tour, hist) {
+  const periodOptions = [
+    ['all', 'Toute la période'], ['last10', '10 derniers relevés'],
+    ['7', '7 derniers jours'], ['30', '30 derniers jours'], ['90', '90 derniers jours']
+  ].map(([v, l]) => `<option value="${v}" ${detailPeriod === v ? 'selected' : ''}>${l}</option>`).join('');
+
+  const periodSelect = `
+    <div class="flex items-center justify-between mb-4 gap-3">
+      <h3 class="font-semibold text-slate-700">Indicateurs de performance</h3>
+      <select onchange="setDetailPeriod(this.value)" class="text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-indigo-200">${periodOptions}</select>
+    </div>`;
+
+  const stats = filterByPeriod(hist).map(e => ({ e, s: evalEntry(e) }));
+  const n = stats.length;
+
+  if (n === 0) {
+    return periodSelect + `
+      <div class="text-center py-14 text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
+        <i data-lucide="gauge" class="w-9 h-9 mx-auto mb-3"></i>
+        <p class="font-medium">Pas encore de données pour calculer des KPI</p>
+        <p class="text-sm">Terminez une tournée (ou élargissez la période) pour les voir apparaître.</p>
+      </div>`;
+  }
+
+  const sum = f => stats.reduce((a, x) => a + f(x.s), 0);
+  const exec = sum(s => s.exec) / n;
+  const okTot = sum(s => s.ok), nokTot = sum(s => s.nok);
+  const conf = (okTot + nokTot) > 0 ? (okTot / (okTot + nokTot)) * 100 : null;
+  const anomalies = sum(s => s.anomalies);
+  const complete = (stats.filter(x => x.s.answered === x.s.total).length / n) * 100;
+  const sigSessions = stats.filter(x => x.s.sigTotal > 0);
+  const sigRate = sigSessions.length
+    ? (sigSessions.filter(x => x.s.sigDone === x.s.sigTotal).length / sigSessions.length) * 100 : null;
+  const visaStats = stats.filter(x => x.e.managerVisa);
+  const visaRate = (visaStats.length / n) * 100;
+  const visaDelay = visaStats.length
+    ? visaStats.reduce((a, x) => a + (new Date(x.e.managerVisa.signedAt) - new Date(x.e.completedAt || x.e.date)), 0) / visaStats.length / 3600000
+    : null;
+  const withAnomaly = (stats.filter(x => x.s.anomalies > 0).length / n) * 100;
+
+  const cards = [
+    kpiCard('Relevés réalisés', n, 'sur la période', 'text-slate-800'),
+    kpiCard("Taux d'exécution moyen", pctText(exec), 'points renseignés / total', rateColor(exec)),
+    kpiCard('Taux de conformité', pctText(conf), `${okTot} conforme(s) · ${nokTot} non conforme(s)`, rateColor(conf)),
+    kpiCard('Anomalies', anomalies, `${(anomalies / n).toFixed(1)} par relevé · ${Math.round(withAnomaly)} % des relevés concernés`, anomalies > 0 ? 'text-red-500' : 'text-green-600'),
+    kpiCard('Relevés 100 % complets', pctText(complete), 'tous les points renseignés', rateColor(complete)),
+    kpiCard('Signatures complètes', pctText(sigRate), sigSessions.length ? 'relevés avec tous les VISA signés' : 'aucun VISA dans cette tournée', rateColor(sigRate)),
+    kpiCard('Relevés visés (manager)', pctText(visaRate), `${visaStats.length} sur ${n} relevé(s)`, rateColor(visaRate)),
+    kpiCard('Délai moyen de visa', visaDelay === null ? '—' : fmtDelay(visaDelay), 'entre la fin du relevé et le visa', 'text-slate-800')
+  ].join('');
+
+  // --- Top anomalies récurrentes ---
+  const agg = {};
+  stats.forEach(({ e }) => e.points.forEach(p => {
+    const r = e.results[p.id];
+    if (!r) return;
+    if (!agg[p.id]) agg[p.id] = { name: p.name, number: p.number, count: 0, occ: 0 };
+    agg[p.id].name = p.name;
+    if (isPointAnswered(p, r)) agg[p.id].occ++;
+    if (r.alert) agg[p.id].count++;
+  }));
+  const top = Object.values(agg).filter(a => a.count > 0).sort((a, b) => b.count - a.count).slice(0, 8);
+  const topHtml = top.length ? top.map(a => `
+    <div class="flex items-center justify-between gap-3 py-2.5 border-b border-slate-100 last:border-0">
+      <p class="text-sm text-slate-700 min-w-0 truncate">${a.number ? escapeHtml(a.number) + '. ' : ''}${escapeHtml(a.name)}</p>
+      <span class="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-700">${a.count} / ${a.occ}</span>
+    </div>`).join('') : `<p class="text-sm text-slate-400 py-2">Aucune anomalie sur la période 🎉</p>`;
+
+  // --- Par opérateur ---
+  const ops = {};
+  stats.forEach(({ e, s }) => {
+    const k = (e.operator || '').trim() || '—';
+    if (!ops[k]) ops[k] = { n: 0, exec: 0, ok: 0, nok: 0 };
+    ops[k].n++; ops[k].exec += s.exec; ops[k].ok += s.ok; ops[k].nok += s.nok;
+  });
+  const opsHtml = Object.entries(ops).sort((a, b) => b[1].n - a[1].n).map(([name, o]) => {
+    const c = (o.ok + o.nok) > 0 ? (o.ok / (o.ok + o.nok)) * 100 : null;
+    return `
+      <tr class="border-b border-slate-100 last:border-0">
+        <td class="py-2.5 pr-2 text-slate-700">${escapeHtml(name)}</td>
+        <td class="py-2.5 text-center">${o.n}</td>
+        <td class="py-2.5 text-center font-semibold ${rateColor(o.exec / o.n)}">${pctText(o.exec / o.n)}</td>
+        <td class="py-2.5 text-center font-semibold ${rateColor(c)}">${pctText(c)}</td>
+      </tr>`;
+  }).join('');
+
+  // --- Suivi d'une valeur numérique ---
+  const numericPoints = tour.points.filter(p => p.type === 'numeric' &&
+    stats.some(({ e }) => e.results[p.id] && e.results[p.id].value !== '' && e.results[p.id].value !== undefined));
+  let valueBlock = '';
+  if (numericPoints.length) {
+    if (!numericPoints.find(p => p.id === detailPointId)) detailPointId = numericPoints[0].id;
+    const p = numericPoints.find(x => x.id === detailPointId);
+    const series = [];
+    stats.forEach(({ e }) => {
+      const r = e.results[p.id];
+      if (r && r.value !== '' && r.value !== undefined && isNumeric(r.value)) {
+        series.push({ v: parseFloat(r.value), d: e.completedAt || e.date, alert: !!r.alert });
+      }
+    });
+    const opts = numericPoints.map(x =>
+      `<option value="${x.id}" ${x.id === detailPointId ? 'selected' : ''}>${escapeHtml((x.number ? x.number + '. ' : '') + x.name)}</option>`).join('');
+    valueBlock = `
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+          <h4 class="font-semibold text-slate-700 text-sm">Suivi d'une valeur relevée</h4>
+          <select onchange="setDetailPoint(this.value)" class="text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-indigo-200 max-w-full">${opts}</select>
+        </div>
+        <p class="text-xs text-slate-400 mb-2">Cible : ${escapeHtml(formatTargetLabel(p))}</p>
+        ${renderValueChart(series, p)}
+      </div>`;
+  }
+
+  return `
+    ${periodSelect}
+    <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">${cards}</div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-4">
+      <h4 class="font-semibold text-slate-700 text-sm mb-3">Évolution par relevé</h4>
+      ${renderTrendChart(stats)}
+    </div>
+
+    ${valueBlock}
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+        <h4 class="font-semibold text-slate-700 text-sm mb-1">Points les plus souvent en anomalie</h4>
+        <p class="text-[11px] text-slate-400 mb-2">anomalies / relevés où le point a été renseigné</p>
+        ${topHtml}
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+        <h4 class="font-semibold text-slate-700 text-sm mb-2">Par opérateur</h4>
+        <table class="w-full text-sm">
+          <thead><tr class="text-[11px] text-slate-400 text-left">
+            <th class="pb-1 font-medium">Opérateur</th><th class="pb-1 font-medium text-center">Relevés</th>
+            <th class="pb-1 font-medium text-center">Exéc.</th><th class="pb-1 font-medium text-center">Conf.</th>
+          </tr></thead>
+          <tbody>${opsHtml}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+/** Courbes exécution / conformité par relevé (20 derniers) */
+function renderTrendChart(stats) {
+  const data = stats.slice(-20);
+  const W = 600, H = 200, pl = 34, pr = 12, pt = 12, pb = 26;
+  const x = i => data.length === 1 ? pl + (W - pl - pr) / 2 : pl + i * (W - pl - pr) / (data.length - 1);
+  const y = v => pt + (H - pt - pb) * (1 - v / 100);
+
+  let grid = '';
+  [0, 25, 50, 75, 100].forEach(v => {
+    grid += `<line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" stroke="#e2e8f0" stroke-width="1"/>
+             <text x="${pl - 6}" y="${y(v) + 3}" text-anchor="end" font-size="10" fill="#94a3b8">${v}</text>`;
+  });
+
+  function series(getter, color) {
+    const pts = data.map((d, i) => ({ i, v: getter(d.s), d })).filter(p => p.v !== null && p.v !== undefined);
+    if (!pts.length) return '';
+    const line = pts.length > 1
+      ? `<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" points="${pts.map(p => `${x(p.i)},${y(p.v)}`).join(' ')}"/>` : '';
+    const dots = pts.map(p => `<circle cx="${x(p.i)}" cy="${y(p.v)}" r="4" fill="${color}"><title>${formatDate(p.d.e.completedAt || p.d.e.date)} : ${Math.round(p.v)} %</title></circle>`).join('');
+    return line + dots;
+  }
+
+  const first = shortDate(data[0].e.completedAt || data[0].e.date);
+  const last = shortDate(data[data.length - 1].e.completedAt || data[data.length - 1].e.date);
+  const xLabels = data.length > 1
+    ? `<text x="${pl}" y="${H - 8}" font-size="10" fill="#94a3b8">${first}</text><text x="${W - pr}" y="${H - 8}" text-anchor="end" font-size="10" fill="#94a3b8">${last}</text>`
+    : `<text x="${W / 2}" y="${H - 8}" text-anchor="middle" font-size="10" fill="#94a3b8">${first}</text>`;
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" class="w-full h-auto">${grid}${xLabels}${series(s => s.exec, '#6366f1')}${series(s => s.conf, '#16a34a')}</svg>
+    <div class="flex gap-4 text-xs text-slate-500 mt-2">
+      <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-indigo-500 inline-block"></span> Taux d'exécution</span>
+      <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-green-600 inline-block"></span> Taux de conformité</span>
+    </div>`;
+}
+
+/** Évolution d'une valeur numérique avec seuils min / max */
+function renderValueChart(series, p) {
+  if (!series.length) return '<p class="text-sm text-slate-400">Aucune valeur relevée.</p>';
+  const W = 600, H = 190, pl = 44, pr = 12, pt = 12, pb = 26;
+  const vals = series.map(s => s.v);
+  const hasMin = p.min !== null && p.min !== undefined;
+  const hasMax = p.max !== null && p.max !== undefined;
+  if (hasMin) vals.push(p.min);
+  if (hasMax) vals.push(p.max);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (lo === hi) { lo -= 1; hi += 1; }
+  const pad = (hi - lo) * 0.12; lo -= pad; hi += pad;
+
+  const x = i => series.length === 1 ? pl + (W - pl - pr) / 2 : pl + i * (W - pl - pr) / (series.length - 1);
+  const y = v => pt + (H - pt - pb) * (1 - (v - lo) / (hi - lo));
+  const fmt = v => String(Number(v.toFixed(2)));
+
+  let grid = '';
+  for (let k = 0; k <= 4; k++) {
+    const v = lo + (hi - lo) * k / 4;
+    grid += `<line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" stroke="#f1f5f9"/>
+             <text x="${pl - 6}" y="${y(v) + 3}" text-anchor="end" font-size="10" fill="#94a3b8">${fmt(v)}</text>`;
+  }
+  const thr = (v, label) => `
+    <line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="${W - pr}" y="${y(v) - 4}" text-anchor="end" font-size="10" fill="#ef4444">${label} ${fmt(v)}</text>`;
+
+  const line = series.length > 1
+    ? `<polyline fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linejoin="round" points="${series.map((s, i) => `${x(i)},${y(s.v)}`).join(' ')}"/>` : '';
+  const dots = series.map((s, i) =>
+    `<circle cx="${x(i)}" cy="${y(s.v)}" r="4.5" fill="${s.alert ? '#ef4444' : '#6366f1'}"><title>${formatDate(s.d)} : ${s.v}${p.unit ? ' ' + escapeHtml(p.unit) : ''}</title></circle>`).join('');
+
+  const first = shortDate(series[0].d), last = shortDate(series[series.length - 1].d);
+  const xLabels = series.length > 1
+    ? `<text x="${pl}" y="${H - 8}" font-size="10" fill="#94a3b8">${first}</text><text x="${W - pr}" y="${H - 8}" text-anchor="end" font-size="10" fill="#94a3b8">${last}</text>`
+    : `<text x="${W / 2}" y="${H - 8}" text-anchor="middle" font-size="10" fill="#94a3b8">${first}</text>`;
+
+  return `<svg viewBox="0 0 ${W} ${H}" class="w-full h-auto">${grid}${hasMin ? thr(p.min, 'min') : ''}${hasMax ? thr(p.max, 'max') : ''}${xLabels}${line}${dots}</svg>`;
+}
+
+
+/* --------------------------- 11c. DOSSIERS ------------------------------- */
+
+/** Modale générique de saisie d'un nom */
+function askName(title, initial, okLabel, onOk) {
+  openModal(`
+    <h3 class="text-lg font-bold mb-4 text-slate-800">${escapeHtml(title)}</h3>
+    <input id="ask-name-input" value="${escapeHtml(initial || '')}" placeholder="Nom du dossier"
+      class="w-full border border-slate-200 rounded-xl px-3 py-3 outline-none focus:ring-2 focus:ring-indigo-200">
+    <div class="flex gap-2 mt-5">
+      <button onclick="closeModal()" class="flex-1 py-3 rounded-xl bg-slate-100 font-medium hover:bg-slate-200">Annuler</button>
+      <button id="ask-name-ok" class="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700">${escapeHtml(okLabel)}</button>
+    </div>`);
+  const input = document.getElementById('ask-name-input');
+  const submit = () => {
+    const v = input.value.trim();
+    if (!v) { toast('Le nom est requis', 'error'); return; }
+    closeModal();
+    onOk(v);
+  };
+  document.getElementById('ask-name-ok').onclick = submit;
+  input.addEventListener('keydown', ev => { if (ev.key === 'Enter') submit(); });
+  setTimeout(() => { input.focus(); input.select(); }, 50);
+}
+
+function createFolder(onCreated) {
+  askName('Nouveau dossier', '', 'Créer', name => {
+    const f = { id: genId(), name, collapsed: false };
+    state.folders.push(f);
+    saveState();
+    renderHome();
+    toast('Dossier créé', 'success');
+    if (typeof onCreated === 'function') onCreated(f);
+  });
+}
+
+function renameFolder(folderId) {
+  const f = state.folders.find(x => x.id === folderId);
+  if (!f) return;
+  askName('Renommer le dossier', f.name, 'Enregistrer', name => {
+    f.name = name;
+    saveState();
+    renderHome();
+  });
+}
+
+function confirmDeleteFolder(folderId) {
+  const f = state.folders.find(x => x.id === folderId);
+  if (!f) return;
+  confirmAction(`Supprimer le dossier « ${f.name} » ? Les tournées qu'il contient ne sont pas supprimées : elles repassent « sans dossier ».`, () => {
+    state.tours.forEach(t => { if (t.folderId === folderId) t.folderId = null; });
+    state.folders = state.folders.filter(x => x.id !== folderId);
+    saveState();
+    renderHome();
+    toast('Dossier supprimé', 'success');
+  });
+}
+
+function toggleFolder(folderId) {
+  const f = state.folders.find(x => x.id === folderId);
+  if (!f) return;
+  f.collapsed = !f.collapsed;
+  saveState();
+  renderHome();
+}
+
+function openMoveModal(tourId) {
+  const tour = state.tours.find(t => t.id === tourId);
+  if (!tour) return;
+  const options = [{ id: null, name: 'Sans dossier' }, ...state.folders].map(f => {
+    const current = (tour.folderId || null) === f.id;
+    return `
+      <button onclick="moveTour('${tourId}', ${f.id ? `'${f.id}'` : 'null'})"
+        class="w-full text-left px-3.5 py-3 rounded-xl border-2 font-medium flex items-center gap-2.5 ${current ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-100 hover:border-indigo-200'}">
+        <i data-lucide="${f.id ? 'folder' : 'inbox'}" class="w-4 h-4 flex-shrink-0"></i>
+        <span class="truncate">${escapeHtml(f.name)}</span>
+        ${current ? '<i data-lucide="check" class="w-4 h-4 ml-auto flex-shrink-0"></i>' : ''}
+      </button>`;
+  }).join('');
+
+  openModal(`
+    <h3 class="text-lg font-bold text-slate-800">Déplacer la tournée</h3>
+    <p class="text-xs text-slate-400 mb-4 truncate">${escapeHtml(tour.name)}</p>
+    <div class="space-y-2 max-h-[45vh] overflow-y-auto">${options}</div>
+    <button onclick="closeModal(); createFolder(function(f){ moveTour('${tourId}', f.id); })"
+      class="w-full mt-3 py-3 rounded-xl border-2 border-dashed border-slate-300 text-slate-600 font-medium flex items-center justify-center gap-2 hover:border-indigo-400 hover:text-indigo-600">
+      <i data-lucide="folder-plus" class="w-4 h-4"></i> Nouveau dossier
+    </button>
+    <button onclick="closeModal()" class="w-full mt-2 py-3 rounded-xl bg-slate-100 font-medium hover:bg-slate-200">Annuler</button>`);
+}
+
+function moveTour(tourId, folderId) {
+  const tour = state.tours.find(t => t.id === tourId);
+  if (!tour) return;
+  tour.folderId = folderId || null;
+  const f = folderId ? state.folders.find(x => x.id === folderId) : null;
+  if (f) f.collapsed = false;
+  saveState();
+  closeModal();
+  renderHome();
+  toast(f ? `Déplacée dans « ${f.name} »` : 'Tournée retirée du dossier', 'success');
+}
+
+/** Après un import Excel multi-zones : propose de les ranger d'un coup dans un dossier */
+function proposeFolderForImport(tourIds, fileName) {
+  const base = String(fileName || '').replace(/\.[^.]+$/, '');
+  askName(`Ranger les ${tourIds.length} tournées importées dans un dossier ?`, base, 'Créer le dossier', name => {
+    const f = { id: genId(), name, collapsed: false };
+    state.folders.push(f);
+    state.tours.forEach(t => { if (tourIds.includes(t.id)) t.folderId = f.id; });
+    saveState();
+    renderHome();
+    toast(`Dossier « ${name} » créé`, 'success');
+  });
+}
+
+
+/* --------------------------- 11d. VISA MANAGER --------------------------- */
+
+function pendingVisaCount(tourId) {
+  return (state.history[tourId] || []).filter(e => !e.managerVisa).length;
+}
+
+function pendingVisaChip(tourId) {
+  const n = pendingVisaCount(tourId);
+  if (!n) return '';
+  return `<button onclick="openDetail('${tourId}')" class="flex items-center gap-1.5 text-xs text-amber-600 font-medium hover:underline text-left">
+    <i data-lucide="pen-tool" class="w-3.5 h-3.5 flex-shrink-0"></i> ${n} relevé(s) en attente de visa manager</button>`;
+}
+
+function fmtDelay(hours) {
+  if (hours < 1) return '< 1 h';
+  if (hours < 48) return Math.round(hours) + ' h';
+  return Math.round(hours / 24) + ' j';
+}
+
+/** Bloc d'affichage du visa manager d'un relevé archivé (visa apposé, ou bouton pour le poser) */
+function visaBlock(e) {
+  if (e.managerVisa) {
+    return `
+      <div class="mt-3 bg-green-50 border border-green-200 rounded-xl px-3 py-2.5 flex items-start gap-2.5">
+        <div class="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center flex-shrink-0">
+          <i data-lucide="shield-check" class="w-4 h-4"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="text-sm font-semibold text-green-800 truncate">Visa manager : ${escapeHtml(e.managerVisa.name)}</p>
+          <p class="text-xs text-green-600">Signé électroniquement le ${formatDate(e.managerVisa.signedAt)}</p>
+          ${e.managerVisa.comment ? `<p class="text-xs text-slate-600 mt-1">« ${escapeHtml(e.managerVisa.comment)} »</p>` : ''}
+        </div>
+      </div>`;
+  }
+  return `
+    <button onclick="openManagerVisa('${e.id}')" class="mt-3 w-full py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm font-semibold flex items-center justify-center gap-2 hover:bg-amber-100 active:scale-[0.98] transition">
+      <i data-lucide="pen-tool" class="w-4 h-4"></i> Apposer le visa manager
+    </button>`;
+}
+
+function openManagerVisa(entryId) {
+  const e = findEntry(entryId);
+  if (!e || e.managerVisa) return;
+  const s = evalEntry(e);
+  openModal(`
+    <h3 class="text-lg font-bold text-slate-800">Visa du manager</h3>
+    <p class="text-xs text-slate-400 mb-4">Relevé du ${formatDate(e.completedAt || e.date)} · ${escapeHtml(e.operator || '—')}<br>
+      Exécution ${pctText(s.exec)} · Conformité ${pctText(s.conf)} · ${s.anomalies} anomalie(s)</p>
+    <label class="text-xs font-medium text-slate-500">Nom et prénom du manager</label>
+    <input id="mv-name" oninput="document.getElementById('mv-ok').disabled = !this.value.trim()"
+      class="w-full border-2 border-slate-200 rounded-xl px-3 py-3 mt-1 text-sm font-medium outline-none focus:border-indigo-400" placeholder="Nom et prénom du signataire">
+    <label class="text-xs font-medium text-slate-500 mt-3 block">Commentaire (optionnel)</label>
+    <textarea id="mv-comment" rows="2" class="w-full border border-slate-200 rounded-xl p-2.5 mt-1 text-sm outline-none focus:ring-2 focus:ring-indigo-200 resize-none" placeholder="Remarque du manager, actions à suivre..."></textarea>
+    <p class="text-xs text-slate-400 mt-2">Le visa est horodaté et définitif : il ne pourra plus être modifié.</p>
+    <div class="flex gap-2 mt-5">
+      <button onclick="closeModal()" class="flex-1 py-3 rounded-xl bg-slate-100 font-medium hover:bg-slate-200">Plus tard</button>
+      <button id="mv-ok" disabled onclick="confirmManagerVisa('${e.id}')"
+        class="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-semibold flex items-center justify-center gap-2 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed">
+        <i data-lucide="pen-tool" class="w-4 h-4"></i> Viser
+      </button>
+    </div>`);
+  setTimeout(() => { const i = document.getElementById('mv-name'); if (i) i.focus(); }, 50);
+}
+
+function confirmManagerVisa(entryId) {
+  const e = findEntry(entryId);
+  if (!e || e.managerVisa) return;
+  const name = document.getElementById('mv-name').value.trim();
+  const comment = document.getElementById('mv-comment').value.trim();
+  if (!name) { toast('Veuillez saisir le nom du manager', 'error'); return; }
+
+  confirmAction(`Confirmer le visa électronique de « ${name} » ? Cette action est définitive, horodatée, et ne pourra plus être modifiée.`, () => {
+    e.managerVisa = { name, comment, signedAt: new Date().toISOString() };
+    saveState();
+    if (document.getElementById('view-detail').classList.contains('hidden')) openDetail(currentTourId);
+    else renderDetail();
+    toast('Visa manager enregistré', 'success');
+  }, 'Viser');
+}
+
+
+/* --------------------------- 12. INITIALISATION -------------------------- */
+
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+  } catch (e) { /* non bloquant */ }
+
+  loadState();
+
+  if (!localStorage.getItem(STORAGE_KEY)) {
+    seedDemoData();
+    saveState();
+  }
+
+  document.getElementById('btn-back').onclick = () => showView('home');
+
+  const dateInput = document.getElementById('exec-date');
+  if (dateInput) dateInput.value = new Date().toISOString().substring(0, 10);
+
+  showView('home');
+  lucide.createIcons();
+});
+</script>
+</body>
+</html>

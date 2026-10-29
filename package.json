@@ -1,0 +1,24 @@
+{
+  "name": "inspectour",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build:web": "npx tailwindcss -c tailwind.config.js -i src/input.css -o www/vendor/tailwind.css --minify && cp src/index.html www/index.html && cp src/android-bridge.js www/vendor/android-bridge.js",
+    "sync": "npm run build:web && npx cap sync android"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/share": "^8.0.3",
+    "lucide": "^1.64.0",
+    "tailwindcss": "^3.4.19",
+    "xlsx": "^0.18.5"
+  },
+  "private": true
+}

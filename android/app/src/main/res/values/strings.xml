@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">InspecTour</string>
+    <string name="title_activity_main">InspecTour</string>
+    <string name="package_name">com.inspectour.app</string>
+    <string name="custom_url_scheme">com.inspectour.app</string>
+</resources>
