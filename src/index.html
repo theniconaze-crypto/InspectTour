@@ -55,14 +55,57 @@
           </div>
         </div>
       </div>
+      <div id="header-user" class="hidden flex items-center gap-1.5">
+        <button id="btn-bell" onclick="openPendingVisas()" class="hidden relative p-2 rounded-xl hover:bg-slate-100 active:scale-95 transition" title="Visas en attente">
+          <i data-lucide="bell" class="w-5 h-5 text-slate-600"></i>
+          <span id="bell-badge" class="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">0</span>
+        </button>
+        <button onclick="openAccountMenu()" class="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-xl hover:bg-slate-100 active:scale-95 transition text-left">
+          <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center"><i data-lucide="user" class="w-4 h-4"></i></div>
+          <div class="hidden sm:block leading-tight">
+            <p id="hdr-user-name" class="text-sm font-semibold text-slate-700 max-w-[140px] truncate"></p>
+            <p id="hdr-user-role" class="text-[11px] text-slate-400"></p>
+          </div>
+        </button>
+      </div>
     </div>
   </header>
 
   <!-- ============== CONTENU PRINCIPAL ============== -->
   <main class="flex-1 max-w-6xl w-full mx-auto px-4 py-5 no-print">
 
+    <!-- ========== VUE : CONNEXION ========== -->
+    <section id="view-login" class="hidden">
+      <div class="max-w-sm mx-auto mt-6 sm:mt-12">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+          <div class="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center mx-auto mb-4 shadow-sm"><i data-lucide="lock" class="w-7 h-7"></i></div>
+          <h2 class="text-xl font-bold text-center text-slate-800">Connexion</h2>
+          <p class="text-sm text-slate-400 text-center mb-5">Identifiez-vous pour accéder à vos tournées</p>
+          <label class="text-xs font-medium text-slate-500">Identifiant</label>
+          <input id="login-username" autocapitalize="none" autocomplete="username" class="w-full border border-slate-200 rounded-xl px-3 py-3 mt-1 mb-3 outline-none focus:ring-2 focus:ring-indigo-200">
+          <label class="text-xs font-medium text-slate-500">Mot de passe</label>
+          <input id="login-password" type="password" autocomplete="current-password" class="w-full border border-slate-200 rounded-xl px-3 py-3 mt-1 outline-none focus:ring-2 focus:ring-indigo-200">
+          <p id="login-error" class="text-sm text-red-600 mt-3 min-h-[1.25rem]"></p>
+          <button onclick="doLogin()" class="w-full mt-2 py-3.5 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 active:scale-[0.98] transition">Se connecter</button>
+          <div id="login-hint" class="hidden mt-4 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== VUE : UTILISATEURS ========== -->
+    <section id="view-users" class="hidden">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold text-slate-700">Utilisateurs (<span id="users-count">0</span>)</h2>
+        <button onclick="openUserModal()" class="bg-indigo-600 text-white text-sm font-medium px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 hover:bg-indigo-700 active:scale-95 transition">
+          <i data-lucide="user-plus" class="w-4 h-4"></i> Ajouter
+        </button>
+      </div>
+      <div id="users-list" class="space-y-2 pb-10"></div>
+    </section>
+
     <!-- ========== VUE : ACCUEIL ========== -->
     <section id="view-home">
+      <div id="home-banner"></div>
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
           <p class="text-xs text-slate-400 mb-1">Tournées</p>
@@ -82,7 +125,7 @@
         </div>
       </div>
 
-      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+      <div id="home-actions" class="flex flex-col sm:flex-row gap-3 mb-6">
         <button onclick="createNewTour()" class="flex-1 bg-indigo-600 text-white font-semibold py-3.5 rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-700 active:scale-[0.98] transition shadow-sm">
           <i data-lucide="plus-circle" class="w-5 h-5"></i> Nouvelle tournée
         </button>
@@ -94,6 +137,10 @@
           <i data-lucide="folder-plus" class="w-5 h-5"></i> Nouveau dossier
         </button>
       </div>
+
+      <button id="btn-users" onclick="showView('users')" class="hidden w-full mb-6 bg-white border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-2xl flex items-center justify-center gap-2 hover:border-indigo-400 hover:text-indigo-600 active:scale-[0.98] transition">
+        <i data-lucide="users" class="w-5 h-5"></i> Gérer les utilisateurs
+      </button>
 
       <h2 class="font-semibold text-slate-700 mb-3">Mes tournées</h2>
       <div id="home-tours-grid" class="space-y-7"></div>
@@ -199,7 +246,8 @@ let state = {
   tours: [],
   sessions: {},
   history: {},  // tourId -> [ relevés terminés archivés ]
-  folders: []   // [{ id, name, collapsed }] — les tournées y sont rattachées via tour.folderId
+  folders: [],  // [{ id, name, collapsed }] — les tournées y sont rattachées via tour.folderId
+  users: []     // comptes : { id, username, displayName, role, salt, hash, mustChange, active }
 };
 
 let currentTourId = null;
@@ -274,6 +322,7 @@ function loadState() {
     if (!state.sessions) state.sessions = {};
     if (!state.history) state.history = {};
     if (!state.folders) state.folders = [];
+    if (!state.users) state.users = [];
 
     // Migration : les tournées déjà terminées avant l'arrivée de l'historique y sont archivées
     let migrated = false;
@@ -337,21 +386,449 @@ function seedDemoData() {
 }
 
 
+/* --------------------------- 3b. COMPTES & DROITS ----------------------- */
+
+const DEFAULT_ADMIN = { username: 'admin', password: 'totototo', displayName: 'Administrateur' };
+const ROLE_LABELS = { admin: 'Administrateur', manager: 'Manager', user: 'Utilisateur' };
+/* Droits par profil (modifier ici pour ajuster) :
+   edit    = créer/éditer/supprimer tournées, import Excel, dossiers
+   history = historique, KPI, exports
+   visa    = apposer le visa manager + signer les points « Manager »
+   users   = gestion des comptes */
+const ROLES_CAN = {
+  edit: ['admin', 'manager'],
+  history: ['admin', 'manager'],
+  visa: ['admin', 'manager'],
+  users: ['admin']
+};
+const MIN_PASSWORD = 6;
+let currentUser = null;
+let modalLocked = false;
+
+function can(perm) { return !!currentUser && (ROLES_CAN[perm] || []).includes(currentUser.role); }
+function requirePerm(perm) {
+  if (can(perm)) return true;
+  toast("Action non autorisée pour votre profil", 'error');
+  return false;
+}
+
+async function hashPassword(salt, pwd) {
+  const data = salt + ':' + pwd;
+  if (window.crypto && crypto.subtle) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  let h = 5381;
+  for (let i = 0; i < data.length; i++) h = ((h << 5) + h) ^ data.charCodeAt(i);
+  return 'x' + (h >>> 0).toString(16);
+}
+
+function randomSalt() {
+  const a = new Uint8Array(16);
+  if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(a);
+  else for (let i = 0; i < a.length; i++) a[i] = Math.floor(Math.random() * 256);
+  return Array.from(a).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function makeUser({ username, displayName, role, password, mustChange }) {
+  const salt = randomSalt();
+  return {
+    id: genId(), username, displayName, role,
+    salt, hash: await hashPassword(salt, password),
+    mustChange: !!mustChange, active: true, createdAt: Date.now()
+  };
+}
+
+async function setUserPassword(user, password, mustChange) {
+  user.salt = randomSalt();
+  user.hash = await hashPassword(user.salt, password);
+  user.mustChange = !!mustChange;
+}
+
+/** Première utilisation : crée le compte admin avec le mot de passe par défaut */
+async function ensureDefaultAdmin() {
+  if (!state.users) state.users = [];
+  if (!state.users.some(u => u.role === 'admin')) {
+    state.users.push(await makeUser({
+      username: DEFAULT_ADMIN.username, displayName: DEFAULT_ADMIN.displayName,
+      role: 'admin', password: DEFAULT_ADMIN.password, mustChange: true
+    }));
+    saveState();
+  }
+}
+
+function loadSession() {
+  try {
+    const id = sessionStorage.getItem('inspectour_uid');
+    if (id) {
+      const u = state.users.find(x => x.id === id && x.active !== false);
+      if (u && !u.mustChange) currentUser = u;
+    }
+  } catch (e) { /* non bloquant */ }
+}
+
+function renderLogin() {
+  document.getElementById('login-error').textContent = '';
+  document.getElementById('login-password').value = '';
+  const adm = state.users.find(u => u.role === 'admin');
+  const hint = document.getElementById('login-hint');
+  if (adm && adm.mustChange) {
+    hint.classList.remove('hidden');
+    hint.innerHTML = `Première utilisation : identifiant <b>${escapeHtml(DEFAULT_ADMIN.username)}</b> · mot de passe <b>${escapeHtml(DEFAULT_ADMIN.password)}</b>.<br>Vous devrez le changer dès la première connexion.`;
+  } else {
+    hint.classList.add('hidden');
+  }
+  setTimeout(() => { const i = document.getElementById('login-username'); if (i) i.focus(); }, 50);
+}
+
+async function doLogin() {
+  const username = document.getElementById('login-username').value.trim().toLowerCase();
+  const pwd = document.getElementById('login-password').value;
+  const err = document.getElementById('login-error');
+  const fail = msg => { err.textContent = msg; };
+
+  if (!username || !pwd) { fail('Renseignez l\'identifiant et le mot de passe.'); return; }
+  const u = state.users.find(x => x.username.toLowerCase() === username);
+  if (!u || u.active === false) { fail(u ? 'Ce compte est désactivé.' : 'Identifiant ou mot de passe incorrect.'); return; }
+  const h = await hashPassword(u.salt, pwd);
+  if (h !== u.hash) { fail('Identifiant ou mot de passe incorrect.'); return; }
+
+  currentUser = u;
+  try { sessionStorage.setItem('inspectour_uid', u.id); } catch (e) { /* non bloquant */ }
+  document.getElementById('login-password').value = '';
+  err.textContent = '';
+  if (u.mustChange) openChangePassword(true);
+  else afterLogin();
+}
+
+function afterLogin() {
+  showView('home');
+  toast(`Bienvenue ${currentUser.displayName}`, 'success');
+  if (can('visa')) {
+    const n = totalPendingVisas();
+    if (n > 0) setTimeout(() => toast(`${n} relevé(s) en attente de votre visa`, 'warning'), 600);
+  }
+}
+
+function logout() {
+  currentUser = null;
+  currentTourId = null;
+  try { sessionStorage.removeItem('inspectour_uid'); } catch (e) { /* non bloquant */ }
+  closeModal();
+  showView('login');
+}
+
+function updateHeaderUser() {
+  const box = document.getElementById('header-user');
+  if (!box) return;
+  if (!currentUser) { box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  document.getElementById('hdr-user-name').textContent = currentUser.displayName;
+  document.getElementById('hdr-user-role').textContent = ROLE_LABELS[currentUser.role] || '';
+  const bell = document.getElementById('btn-bell');
+  const n = can('visa') ? totalPendingVisas() : 0;
+  bell.classList.toggle('hidden', !can('visa'));
+  const badge = document.getElementById('bell-badge');
+  badge.textContent = n > 99 ? '99+' : n;
+  badge.classList.toggle('hidden', n === 0);
+}
+
+function applyRoleUI() {
+  const actions = document.getElementById('home-actions');
+  if (actions) actions.classList.toggle('hidden', !can('edit'));
+  const btnUsers = document.getElementById('btn-users');
+  if (btnUsers) btnUsers.classList.toggle('hidden', !can('users'));
+}
+
+/* ---- Menu du compte ---- */
+
+function openAccountMenu() {
+  if (!currentUser) return;
+  openModal(`
+    <div class="text-center mb-5">
+      <div class="w-14 h-14 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center mx-auto mb-3"><i data-lucide="user" class="w-7 h-7"></i></div>
+      <p class="font-bold text-slate-800">${escapeHtml(currentUser.displayName)}</p>
+      <p class="text-xs text-slate-400">@${escapeHtml(currentUser.username)} · ${ROLE_LABELS[currentUser.role]}</p>
+    </div>
+    <div class="flex flex-col gap-2">
+      ${can('users') ? `<button onclick="closeModal(); showView('users')" class="w-full py-3 rounded-xl bg-indigo-50 text-indigo-700 font-semibold flex items-center justify-center gap-2 hover:bg-indigo-100"><i data-lucide="users" class="w-4 h-4"></i> Gérer les utilisateurs</button>` : ''}
+      <button onclick="closeModal(); openChangePassword(false)" class="w-full py-3 rounded-xl bg-slate-100 font-medium flex items-center justify-center gap-2 hover:bg-slate-200"><i data-lucide="key-round" class="w-4 h-4"></i> Changer mon mot de passe</button>
+      <button onclick="logout()" class="w-full py-3 rounded-xl bg-red-50 text-red-600 font-semibold flex items-center justify-center gap-2 hover:bg-red-100"><i data-lucide="log-out" class="w-4 h-4"></i> Se déconnecter</button>
+      <button onclick="closeModal()" class="w-full py-3 rounded-xl bg-slate-100 font-medium hover:bg-slate-200">Fermer</button>
+    </div>`);
+}
+
+function openChangePassword(forced) {
+  openModal(`
+    <h3 class="text-lg font-bold mb-2 text-slate-800">${forced ? 'Définir votre mot de passe' : 'Changer mon mot de passe'}</h3>
+    ${forced ? `<p class="text-sm text-slate-500 mb-4">Pour sécuriser votre compte, choisissez un mot de passe personnel (${MIN_PASSWORD} caractères minimum).</p>` : '<div class="mb-2"></div>'}
+    ${forced ? '' : `<label class="text-xs font-medium text-slate-500">Mot de passe actuel</label>
+      <input id="pw-current" type="password" autocomplete="current-password" class="w-full border border-slate-200 rounded-xl px-3 py-3 mt-1 mb-3 outline-none focus:ring-2 focus:ring-indigo-200">`}
+    <label class="text-xs font-medium text-slate-500">Nouveau mot de passe</label>
+    <input id="pw-new" type="password" autocomplete="new-password" class="w-full border border-slate-200 rounded-xl px-3 py-3 mt-1 mb-3 outline-none focus:ring-2 focus:ring-indigo-200">
+    <label class="text-xs font-medium text-slate-500">Confirmer le nouveau mot de passe</label>
+    <input id="pw-confirm" type="password" autocomplete="new-password" class="w-full border border-slate-200 rounded-xl px-3 py-3 mt-1 outline-none focus:ring-2 focus:ring-indigo-200">
+    <p id="pw-error" class="text-sm text-red-600 mt-3 min-h-[1.25rem]"></p>
+    <div class="flex gap-2 mt-3">
+      ${forced
+        ? `<button onclick="modalLocked = false; logout()" class="flex-1 py-3 rounded-xl bg-slate-100 font-medium hover:bg-slate-200">Se déconnecter</button>`
+        : `<button onclick="closeModal()" class="flex-1 py-3 rounded-xl bg-slate-100 font-medium hover:bg-slate-200">Annuler</button>`}
+      <button onclick="submitPasswordChange(${forced ? 'true' : 'false'})" class="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700">Enregistrer</button>
+    </div>`);
+  if (forced) modalLocked = true;
+}
+
+async function submitPasswordChange(forced) {
+  const err = document.getElementById('pw-error');
+  const nw = document.getElementById('pw-new').value;
+  const cf = document.getElementById('pw-confirm').value;
+  if (!forced) {
+    const cur = document.getElementById('pw-current').value;
+    if ((await hashPassword(currentUser.salt, cur)) !== currentUser.hash) { err.textContent = 'Mot de passe actuel incorrect.'; return; }
+  }
+  if (nw.length < MIN_PASSWORD) { err.textContent = `Le mot de passe doit contenir au moins ${MIN_PASSWORD} caractères.`; return; }
+  if (nw === DEFAULT_ADMIN.password) { err.textContent = 'Choisissez un mot de passe différent du mot de passe par défaut.'; return; }
+  if (nw !== cf) { err.textContent = 'La confirmation ne correspond pas.'; return; }
+
+  await setUserPassword(currentUser, nw, false);
+  saveState();
+  modalLocked = false;
+  closeModal();
+  toast('Mot de passe enregistré', 'success');
+  if (forced) afterLogin();
+}
+
+/* ---- Gestion des utilisateurs (admin) ---- */
+
+function renderUsers() {
+  document.getElementById('users-count').textContent = state.users.length;
+  const roleStyle = { admin: 'bg-indigo-600 text-white', manager: 'bg-amber-100 text-amber-700', user: 'bg-slate-100 text-slate-600' };
+  const roleIcon = { admin: 'shield', manager: 'user-check', user: 'user' };
+  document.getElementById('users-list').innerHTML = state.users.map(u => {
+    const self = currentUser && u.id === currentUser.id;
+    const inactive = u.active === false;
+    return `
+      <div class="bg-white rounded-xl border border-slate-100 p-3 flex items-center gap-3 shadow-sm ${inactive ? 'opacity-60' : ''}">
+        <div class="w-9 h-9 rounded-full ${roleStyle[u.role] || roleStyle.user} flex items-center justify-center flex-shrink-0"><i data-lucide="${roleIcon[u.role] || 'user'}" class="w-4 h-4"></i></div>
+        <div class="flex-1 min-w-0">
+          <p class="font-medium text-slate-800 truncate">${escapeHtml(u.displayName)}${self ? ' <span class="text-xs text-slate-400">(vous)</span>' : ''}</p>
+          <p class="text-xs text-slate-400 truncate">@${escapeHtml(u.username)} · ${ROLE_LABELS[u.role] || u.role}${inactive ? ' · désactivé' : ''}${u.mustChange ? ' · mot de passe à changer' : ''}</p>
+        </div>
+        <button onclick="openUserModal('${u.id}')" class="p-2 rounded-lg hover:bg-slate-100 flex-shrink-0" title="Modifier"><i data-lucide="pencil" class="w-4 h-4 text-slate-500"></i></button>
+        <button onclick="openResetPassword('${u.id}')" class="p-2 rounded-lg hover:bg-slate-100 flex-shrink-0" title="Réinitialiser le mot de passe"><i data-lucide="key-round" class="w-4 h-4 text-slate-500"></i></button>
+        ${self ? '' : `
+        <button onclick="toggleUserActive('${u.id}')" class="p-2 rounded-lg hover:bg-slate-100 flex-shrink-0" title="${inactive ? 'Réactiver' : 'Désactiver'}"><i data-lucide="${inactive ? 'user-check' : 'user-x'}" class="w-4 h-4 text-slate-500"></i></button>
+        <button onclick="deleteUser('${u.id}')" class="p-2 rounded-lg hover:bg-red-100 flex-shrink-0" title="Supprimer"><i data-lucide="trash-2" class="w-4 h-4 text-red-500"></i></button>`}
+      </div>`;
+  }).join('');
+  lucide.createIcons();
+}
+
+function openUserModal(userId) {
+  if (!requirePerm('users')) return;
+  const u = userId ? state.users.find(x => x.id === userId) : null;
+  const isAdminAccount = u && u.role === 'admin';
+  openModal(`
+    <h3 class="text-lg font-bold mb-4 text-slate-800">${u ? 'Modifier le compte' : 'Nouveau compte'}</h3>
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs font-medium text-slate-500">Nom affiché (nom et prénom)</label>
+        <input id="uf-display" value="${u ? escapeHtml(u.displayName) : ''}" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 mt-1 outline-none focus:ring-2 focus:ring-indigo-200" placeholder="Ex : Marie Dupont">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-slate-500">Identifiant de connexion</label>
+        <input id="uf-username" value="${u ? escapeHtml(u.username) : ''}" ${u ? 'readonly' : ''} autocapitalize="none" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 mt-1 outline-none focus:ring-2 focus:ring-indigo-200 ${u ? 'bg-slate-50 text-slate-500' : ''}" placeholder="Ex : mdupont">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-slate-500">Profil</label>
+        ${isAdminAccount
+          ? '<p class="text-sm font-medium text-slate-700 mt-1.5">Administrateur (non modifiable)</p>'
+          : `<select id="uf-role" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 mt-1 bg-white outline-none focus:ring-2 focus:ring-indigo-200">
+              <option value="user" ${u && u.role === 'user' || !u ? 'selected' : ''}>Utilisateur — réalise les tournées et signe son visa</option>
+              <option value="manager" ${u && u.role === 'manager' ? 'selected' : ''}>Manager — tous les droits + visa manager</option>
+            </select>`}
+      </div>
+      ${u ? '' : `
+      <div>
+        <label class="text-xs font-medium text-slate-500">Mot de passe provisoire</label>
+        <input id="uf-password" type="text" autocapitalize="none" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 mt-1 outline-none focus:ring-2 focus:ring-indigo-200" placeholder="${MIN_PASSWORD} caractères minimum">
+        <p class="text-xs text-slate-400 mt-1">La personne devra le remplacer à sa première connexion.</p>
+      </div>`}
+    </div>
+    <p id="uf-error" class="text-sm text-red-600 mt-3 min-h-[1.25rem]"></p>
+    <div class="flex gap-2 mt-3">
+      <button onclick="closeModal()" class="flex-1 py-3 rounded-xl bg-slate-100 font-medium hover:bg-slate-200">Annuler</button>
+      <button onclick="saveUser(${u ? `'${u.id}'` : 'null'})" class="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700">Enregistrer</button>
+    </div>`);
+}
+
+async function saveUser(userId) {
+  if (!requirePerm('users')) return;
+  const err = document.getElementById('uf-error');
+  const displayName = document.getElementById('uf-display').value.trim();
+  const roleEl = document.getElementById('uf-role');
+  if (!displayName) { err.textContent = 'Le nom affiché est requis.'; return; }
+
+  if (userId) {
+    const u = state.users.find(x => x.id === userId);
+    if (!u) return;
+    u.displayName = displayName;
+    if (roleEl && u.role !== 'admin') u.role = roleEl.value;
+    saveState();
+    closeModal();
+    renderUsers();
+    toast('Compte modifié', 'success');
+    return;
+  }
+
+  const username = document.getElementById('uf-username').value.trim();
+  const password = document.getElementById('uf-password').value;
+  if (!/^[A-Za-z0-9._-]{3,}$/.test(username)) { err.textContent = 'Identifiant : 3 caractères minimum (lettres, chiffres, . _ -).'; return; }
+  if (state.users.some(x => x.username.toLowerCase() === username.toLowerCase())) { err.textContent = 'Cet identifiant existe déjà.'; return; }
+  if (password.length < MIN_PASSWORD) { err.textContent = `Le mot de passe doit contenir au moins ${MIN_PASSWORD} caractères.`; return; }
+
+  state.users.push(await makeUser({ username, displayName, role: roleEl.value, password, mustChange: true }));
+  saveState();
+  closeModal();
+  renderUsers();
+  toast('Compte créé', 'success');
+}
+
+function openResetPassword(userId) {
+  if (!requirePerm('users')) return;
+  const u = state.users.find(x => x.id === userId);
+  if (!u) return;
+  openModal(`
+    <h3 class="text-lg font-bold text-slate-800">Réinitialiser le mot de passe</h3>
+    <p class="text-xs text-slate-400 mb-4">${escapeHtml(u.displayName)} (@${escapeHtml(u.username)})</p>
+    <label class="text-xs font-medium text-slate-500">Nouveau mot de passe provisoire</label>
+    <input id="rp-password" type="text" autocapitalize="none" class="w-full border border-slate-200 rounded-xl px-3 py-3 mt-1 outline-none focus:ring-2 focus:ring-indigo-200" placeholder="${MIN_PASSWORD} caractères minimum">
+    <p class="text-xs text-slate-400 mt-1">La personne devra le remplacer à sa prochaine connexion.</p>
+    <p id="rp-error" class="text-sm text-red-600 mt-3 min-h-[1.25rem]"></p>
+    <div class="flex gap-2 mt-3">
+      <button onclick="closeModal()" class="flex-1 py-3 rounded-xl bg-slate-100 font-medium hover:bg-slate-200">Annuler</button>
+      <button onclick="confirmResetPassword('${u.id}')" class="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700">Réinitialiser</button>
+    </div>`);
+}
+
+async function confirmResetPassword(userId) {
+  if (!requirePerm('users')) return;
+  const u = state.users.find(x => x.id === userId);
+  const pwd = document.getElementById('rp-password').value;
+  if (!u) return;
+  if (pwd.length < MIN_PASSWORD) { document.getElementById('rp-error').textContent = `Au moins ${MIN_PASSWORD} caractères.`; return; }
+  await setUserPassword(u, pwd, true);
+  saveState();
+  closeModal();
+  renderUsers();
+  toast('Mot de passe réinitialisé', 'success');
+}
+
+function toggleUserActive(userId) {
+  if (!requirePerm('users')) return;
+  const u = state.users.find(x => x.id === userId);
+  if (!u || u.id === currentUser.id || u.role === 'admin') return;
+  u.active = u.active === false;
+  saveState();
+  renderUsers();
+  toast(u.active ? 'Compte réactivé' : 'Compte désactivé', 'success');
+}
+
+function deleteUser(userId) {
+  if (!requirePerm('users')) return;
+  const u = state.users.find(x => x.id === userId);
+  if (!u || u.id === currentUser.id || u.role === 'admin') return;
+  confirmAction(`Supprimer le compte « ${u.displayName} » ? Les relevés déjà réalisés sont conservés.`, () => {
+    state.users = state.users.filter(x => x.id !== userId);
+    saveState();
+    renderUsers();
+    toast('Compte supprimé', 'success');
+  });
+}
+
+/* ---- Visas en attente (notifications manager) ---- */
+
+function allPendingVisas() {
+  const out = [];
+  state.tours.forEach(t => {
+    (state.history[t.id] || []).forEach(e => { if (!e.managerVisa) out.push({ tour: t, entry: e }); });
+  });
+  return out.sort((a, b) => new Date(a.entry.completedAt || a.entry.date) - new Date(b.entry.completedAt || b.entry.date));
+}
+
+function totalPendingVisas() {
+  return allPendingVisas().length;
+}
+
+function renderHomeBanner() {
+  const el = document.getElementById('home-banner');
+  if (!el) return;
+  const n = can('visa') ? totalPendingVisas() : 0;
+  el.innerHTML = n ? `
+    <button onclick="openPendingVisas()" class="w-full mb-5 text-left bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-3 hover:bg-amber-100 active:scale-[0.99] transition">
+      <div class="w-9 h-9 rounded-full bg-amber-500 text-white flex items-center justify-center flex-shrink-0"><i data-lucide="bell-ring" class="w-5 h-5"></i></div>
+      <div class="min-w-0 flex-1">
+        <p class="font-semibold text-amber-800">${n} relevé(s) en attente de votre visa</p>
+        <p class="text-xs text-amber-700">Touchez pour consulter et viser</p>
+      </div>
+      <i data-lucide="chevron-right" class="w-5 h-5 text-amber-600 flex-shrink-0"></i>
+    </button>` : '';
+}
+
+function openPendingVisas() {
+  if (!requirePerm('visa')) return;
+  const list = allPendingVisas();
+  const items = list.length ? list.map(({ tour, entry }) => `
+    <div class="py-3 border-b border-slate-100 last:border-0">
+      <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(tour.name)}</p>
+      <p class="text-xs text-slate-400">${formatDate(entry.completedAt || entry.date)} · ${escapeHtml(entry.operator || '—')}</p>
+      <div class="flex gap-2 mt-2">
+        <button onclick="closeModal(); openDetail('${tour.id}')" class="flex-1 py-2 rounded-xl bg-slate-100 text-sm font-medium hover:bg-slate-200 flex items-center justify-center gap-1.5"><i data-lucide="eye" class="w-4 h-4"></i> Consulter</button>
+        <button onclick="closeModal(); currentTourId='${tour.id}'; openManagerVisa('${entry.id}')" class="flex-1 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 flex items-center justify-center gap-1.5"><i data-lucide="pen-tool" class="w-4 h-4"></i> Viser</button>
+      </div>
+    </div>`).join('') : '<p class="text-sm text-slate-400 py-6 text-center">Aucun relevé en attente de visa 🎉</p>';
+  openModal(`
+    <h3 class="text-lg font-bold text-slate-800 mb-1">Visas en attente</h3>
+    <p class="text-xs text-slate-400 mb-2">${list.length} relevé(s) à viser</p>
+    <div class="max-h-[55vh] overflow-y-auto pr-1">${items}</div>
+    <button onclick="closeModal()" class="w-full mt-4 py-3 rounded-xl bg-slate-100 font-medium hover:bg-slate-200">Fermer</button>`);
+}
+
+/** Les points de signature « Manager » sont réservés aux profils autorisés à viser */
+function isManagerSignaturePoint(p) { return p.type === 'signature' && /manager/i.test(p.name || ''); }
+function canSignPoint(p) { return !isManagerSignaturePoint(p) || can('visa'); }
+
+
 /* --------------------------- 4. NAVIGATION ------------------------------ */
 
 function showView(view) {
-  document.querySelectorAll('#view-home, #view-editor, #view-execution, #view-detail').forEach(v => v.classList.add('hidden'));
+  if (!currentUser && view !== 'login') view = 'login';
+  if (view === 'users' && !can('users')) view = 'home';
+  if (view === 'editor' && !can('edit')) view = 'home';
+  if (view === 'detail' && !can('history')) view = 'home';
+
+  document.querySelectorAll('#view-login, #view-home, #view-editor, #view-execution, #view-detail, #view-users').forEach(v => v.classList.add('hidden'));
   document.getElementById('view-' + view).classList.remove('hidden');
 
   const backBtn = document.getElementById('btn-back');
   const title = document.getElementById('header-title');
   const subtitle = document.getElementById('header-subtitle');
 
-  if (view === 'home') {
+  if (view === 'login') {
+    backBtn.classList.add('hidden');
+    title.textContent = 'InspecTour';
+    subtitle.textContent = "Gestion des tournées d'inspection";
+    renderLogin();
+  } else if (view === 'home') {
     backBtn.classList.add('hidden');
     title.textContent = 'InspecTour';
     subtitle.textContent = "Gestion des tournées d'inspection";
     renderHome();
+  } else if (view === 'users') {
+    backBtn.classList.remove('hidden');
+    title.textContent = 'Utilisateurs';
+    subtitle.textContent = 'Gestion des comptes';
+    renderUsers();
   } else if (view === 'editor') {
     backBtn.classList.remove('hidden');
     title.textContent = 'Édition de la tournée';
@@ -367,6 +844,7 @@ function showView(view) {
     subtitle.textContent = getCurrentTour()?.name || '';
     renderDetail();
   }
+  updateHeaderUser();
   window.scrollTo(0, 0);
 }
 
@@ -374,12 +852,14 @@ function showView(view) {
 /* --------------------------- 5. MODALES ---------------------------- */
 
 function openModal(innerHtml) {
+  modalLocked = false;
   document.getElementById('modal-content').innerHTML = innerHtml;
   document.getElementById('modal-overlay').classList.remove('hidden');
   lucide.createIcons();
 }
 
 function closeModal() {
+  if (modalLocked) return;
   document.getElementById('modal-overlay').classList.add('hidden');
   document.getElementById('modal-content').innerHTML = '';
 }
@@ -564,6 +1044,8 @@ function renderHome() {
   document.getElementById('stat-progress').textContent = inProgress;
   document.getElementById('stat-done').textContent = done;
   document.getElementById('stat-alerts').textContent = totalAlerts;
+  applyRoleUI();
+  renderHomeBanner();
 
   if (state.tours.length === 0 && (state.folders || []).length === 0) {
     grid.innerHTML = `
@@ -608,6 +1090,21 @@ function renderHome() {
         </button>`;
     }
 
+    const manageButtons = can('edit') ? `
+          <button onclick="openMoveModal('${tour.id}')" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200" title="Déplacer dans un dossier">
+            <i data-lucide="folder-input" class="w-4 h-4"></i>
+          </button>
+          <button onclick="openDetail('${tour.id}')" class="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100" title="Historique & KPI">
+            <i data-lucide="history" class="w-4 h-4"></i>
+          </button>
+          <button onclick="openEditor('${tour.id}')" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200" title="Éditer la tournée">
+            <i data-lucide="pencil" class="w-4 h-4"></i>
+          </button>
+          <button onclick="confirmDeleteTour('${tour.id}')" class="p-2.5 rounded-xl bg-slate-100 hover:bg-red-100 hover:text-red-600" title="Supprimer">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        ` : '';
+
     return `
       <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col gap-4 hover:shadow-md transition-shadow">
         <div class="flex items-start justify-between gap-2">
@@ -627,18 +1124,7 @@ function renderHome() {
         ${pendingVisaChip(tour.id)}
         <div class="flex gap-2 pt-3 border-t border-slate-100">
           ${actionButtons}
-          <button onclick="openMoveModal('${tour.id}')" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200" title="Déplacer dans un dossier">
-            <i data-lucide="folder-input" class="w-4 h-4"></i>
-          </button>
-          <button onclick="openDetail('${tour.id}')" class="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100" title="Historique & KPI">
-            <i data-lucide="history" class="w-4 h-4"></i>
-          </button>
-          <button onclick="openEditor('${tour.id}')" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200" title="Éditer la tournée">
-            <i data-lucide="pencil" class="w-4 h-4"></i>
-          </button>
-          <button onclick="confirmDeleteTour('${tour.id}')" class="p-2.5 rounded-xl bg-slate-100 hover:bg-red-100 hover:text-red-600" title="Supprimer">
-            <i data-lucide="trash-2" class="w-4 h-4"></i>
-          </button>
+          ${manageButtons}
         </div>
       </div>`;
   };
@@ -662,10 +1148,10 @@ function renderHome() {
             <i data-lucide="${f.collapsed ? 'folder' : 'folder-open'}" class="w-5 h-5 text-indigo-500 flex-shrink-0"></i>
             <span class="font-semibold text-slate-700 truncate">${escapeHtml(f.name)}</span>
             <span class="text-xs text-slate-400 flex-shrink-0">${ts.length} tournée(s)</span>
-            ${pending > 0 ? `<span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-shrink-0">${pending} à viser</span>` : ''}
+            ${pending > 0 && can('visa') ? `<span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-shrink-0">${pending} à viser</span>` : ''}
           </button>
-          <button onclick="renameFolder('${f.id}')" class="p-2 rounded-xl hover:bg-slate-100" title="Renommer le dossier"><i data-lucide="pencil" class="w-4 h-4 text-slate-500"></i></button>
-          <button onclick="confirmDeleteFolder('${f.id}')" class="p-2 rounded-xl hover:bg-red-100" title="Supprimer le dossier"><i data-lucide="trash-2" class="w-4 h-4 text-red-500"></i></button>
+          ${can('edit') ? `<button onclick="renameFolder('${f.id}')" class="p-2 rounded-xl hover:bg-slate-100" title="Renommer le dossier"><i data-lucide="pencil" class="w-4 h-4 text-slate-500"></i></button>
+          <button onclick="confirmDeleteFolder('${f.id}')" class="p-2 rounded-xl hover:bg-red-100" title="Supprimer le dossier"><i data-lucide="trash-2" class="w-4 h-4 text-red-500"></i></button>` : ''}
         </div>
         ${content}
       </div>`;
@@ -685,6 +1171,7 @@ function renderHome() {
 }
 
 function confirmDeleteTour(tourId) {
+  if (!requirePerm('edit')) return;
   confirmAction("Supprimer définitivement cette tournée ainsi que son historique de relevés ?", () => {
     state.tours = state.tours.filter(t => t.id !== tourId);
     delete state.sessions[tourId];
@@ -699,6 +1186,7 @@ function confirmDeleteTour(tourId) {
 /* --------------------------- 8. ÉDITEUR DE TOURNÉE (CRUD) --------------- */
 
 function createNewTour() {
+  if (!requirePerm('edit')) return;
   const tour = { id: genId(), name: 'Nouvelle tournée', description: '', createdAt: Date.now(), points: [] };
   state.tours.push(tour);
   saveState();
@@ -707,6 +1195,7 @@ function createNewTour() {
 }
 
 function openEditor(tourId) {
+  if (!requirePerm('edit')) return;
   currentTourId = tourId;
   showView('editor');
 }
@@ -932,6 +1421,7 @@ function deletePoint(pointId) {
 /* --------------------------- 9. IMPORT EXCEL ---------------------------- */
 
 async function handleExcelImport(event) {
+  if (!requirePerm('edit')) return;
   const file = event.target.files[0];
   if (!file) return;
 
@@ -1222,7 +1712,7 @@ function emptyResult() { return { value: '', status: null, comment: '', photo: n
 function createEmptySession(tour) {
   return {
     tourId: tour.id,
-    operator: '',
+    operator: currentUser ? currentUser.displayName : '',
     date: new Date().toISOString(),
     status: 'in_progress',
     completedAt: null,
@@ -1251,7 +1741,11 @@ function renderExecution() {
   const session = state.sessions[currentTourId];
 
   document.getElementById('exec-tour-name').textContent = tour.name;
-  document.getElementById('exec-operator').value = session.operator || '';
+  if (!session.operator && currentUser) session.operator = currentUser.displayName;
+  const opEl = document.getElementById('exec-operator');
+  opEl.value = session.operator || '';
+  opEl.readOnly = true;
+  opEl.classList.add('bg-slate-50', 'text-slate-500');
   document.getElementById('exec-date').value = (session.date || new Date().toISOString()).substring(0, 10);
   document.getElementById('exec-points-list').innerHTML = tour.points.map(p => renderPointCard(p)).join('');
 
@@ -1319,18 +1813,26 @@ function renderPointCard(point) {
             <p class="text-xs text-green-600">Signé électroniquement le ${formatDate(r.signedAt)}</p>
           </div>
         </div>`;
+    } else if (!canSignPoint(point)) {
+      body = `
+        <div class="mt-3 bg-amber-50 border-2 border-amber-200 rounded-xl px-3.5 py-3 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-full bg-amber-500 text-white flex items-center justify-center flex-shrink-0">
+            <i data-lucide="lock" class="w-4 h-4"></i>
+          </div>
+          <p class="text-sm text-amber-800 font-medium">Visa réservé à un compte Manager. Il sera apposé après la tournée.</p>
+        </div>`;
     } else {
-      const canSign = r.value && r.value.trim() !== '';
+      const signerName = currentUser ? currentUser.displayName : '';
+      if (r.value !== signerName) r.value = signerName;
+      const canSign = signerName.trim() !== '';
       body = `
         <p class="text-xs text-slate-400 mt-0.5">Signature électronique requise</p>
         <div class="mt-2 space-y-2">
-          <input id="input-${point.id}" type="text" value="${escapeHtml(r.value)}"
-            oninput="updateTextValue('${point.id}', this.value)"
-            class="w-full border-2 border-slate-200 rounded-xl px-3 py-3 text-sm font-medium outline-none focus:border-indigo-400 transition-colors"
-            placeholder="Nom et prénom du signataire">
+          <input id="input-${point.id}" type="text" value="${escapeHtml(r.value)}" readonly
+            class="w-full border-2 border-slate-200 bg-slate-50 text-slate-600 rounded-xl px-3 py-3 text-sm font-medium outline-none">
           <button id="sign-btn-${point.id}" onclick="confirmSignature('${point.id}')" ${canSign ? '' : 'disabled'}
             class="w-full py-3 rounded-xl bg-indigo-600 text-white font-semibold flex items-center justify-center gap-2 hover:bg-indigo-700 active:scale-[0.98] transition disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">
-            <i data-lucide="pen-tool" class="w-4 h-4"></i> Valider la signature
+            <i data-lucide="pen-tool" class="w-4 h-4"></i> Signer en tant que ${escapeHtml(signerName)}
           </button>
         </div>`;
     }
@@ -1453,6 +1955,9 @@ function setConformity(pointId, status) {
 function confirmSignature(pointId) {
   const session = state.sessions[currentTourId];
   const r = session.results[pointId];
+  const sigPoint = getCurrentTour().points.find(p => p.id === pointId);
+  if (!currentUser || !sigPoint || !canSignPoint(sigPoint)) { toast('Ce visa est réservé à un compte Manager', 'error'); return; }
+  r.value = currentUser.displayName;
 
   if (!r.value || !r.value.trim()) {
     toast('Veuillez saisir un nom avant de signer', 'error');
@@ -1464,6 +1969,7 @@ function confirmSignature(pointId) {
     () => {
       r.status = 'SIGNED';
       r.signedAt = new Date().toISOString();
+      r.signedBy = currentUser.id;
       r.alert = false;
       saveState();
       refreshPointCard(pointId);
@@ -1570,12 +2076,14 @@ function openReportModal() {
         <button onclick="generatePDF()" class="w-full py-3.5 rounded-xl bg-indigo-600 text-white font-semibold flex items-center justify-center gap-2 hover:bg-indigo-700">
           <i data-lucide="file-down" class="w-4 h-4"></i> Générer le rapport PDF
         </button>
+        ${can('visa') ? `
         <button onclick="openManagerVisa(getHistory(currentTourId).slice(-1)[0].id)" class="w-full py-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 font-semibold flex items-center justify-center gap-2 hover:bg-amber-100">
           <i data-lucide="pen-tool" class="w-4 h-4"></i> Visa du manager
         </button>
         <button onclick="closeModal(); openDetail(currentTourId, 'kpi');" class="w-full py-3.5 rounded-xl bg-indigo-50 text-indigo-700 font-semibold flex items-center justify-center gap-2 hover:bg-indigo-100">
           <i data-lucide="gauge" class="w-4 h-4"></i> Voir l'historique & les KPI
         </button>
+        ` : `<p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">Ce relevé est transmis au manager pour visa.</p>`}
         <button onclick="closeModal(); showView('home');" class="w-full py-3.5 rounded-xl bg-slate-100 font-medium hover:bg-slate-200">Retour à l'accueil</button>
       </div>
     </div>
@@ -1734,6 +2242,7 @@ function findEntry(id) {
 }
 
 function openDetail(tourId, tab) {
+  if (!requirePerm('history')) return;
   currentTourId = tourId;
   detailTab = tab || 'history';
   detailPointId = '';
@@ -1898,6 +2407,7 @@ function printEntry(entryId) {
 }
 
 function deleteEntry(entryId) {
+  if (!requirePerm('edit')) return;
   confirmAction('Supprimer définitivement ce relevé de l\'historique ?', () => {
     state.history[currentTourId] = (state.history[currentTourId] || []).filter(e => e.id !== entryId);
     saveState();
@@ -2198,6 +2708,7 @@ function askName(title, initial, okLabel, onOk) {
 }
 
 function createFolder(onCreated) {
+  if (!requirePerm('edit')) return;
   askName('Nouveau dossier', '', 'Créer', name => {
     const f = { id: genId(), name, collapsed: false };
     state.folders.push(f);
@@ -2209,6 +2720,7 @@ function createFolder(onCreated) {
 }
 
 function renameFolder(folderId) {
+  if (!requirePerm('edit')) return;
   const f = state.folders.find(x => x.id === folderId);
   if (!f) return;
   askName('Renommer le dossier', f.name, 'Enregistrer', name => {
@@ -2219,6 +2731,7 @@ function renameFolder(folderId) {
 }
 
 function confirmDeleteFolder(folderId) {
+  if (!requirePerm('edit')) return;
   const f = state.folders.find(x => x.id === folderId);
   if (!f) return;
   confirmAction(`Supprimer le dossier « ${f.name} » ? Les tournées qu'il contient ne sont pas supprimées : elles repassent « sans dossier ».`, () => {
@@ -2239,6 +2752,7 @@ function toggleFolder(folderId) {
 }
 
 function openMoveModal(tourId) {
+  if (!requirePerm('edit')) return;
   const tour = state.tours.find(t => t.id === tourId);
   if (!tour) return;
   const options = [{ id: null, name: 'Sans dossier' }, ...state.folders].map(f => {
@@ -2264,6 +2778,7 @@ function openMoveModal(tourId) {
 }
 
 function moveTour(tourId, folderId) {
+  if (!requirePerm('edit')) return;
   const tour = state.tours.find(t => t.id === tourId);
   if (!tour) return;
   tour.folderId = folderId || null;
@@ -2296,6 +2811,7 @@ function pendingVisaCount(tourId) {
 }
 
 function pendingVisaChip(tourId) {
+  if (!can('visa')) return '';
   const n = pendingVisaCount(tourId);
   if (!n) return '';
   return `<button onclick="openDetail('${tourId}')" class="flex items-center gap-1.5 text-xs text-amber-600 font-medium hover:underline text-left">
@@ -2330,6 +2846,7 @@ function visaBlock(e) {
 }
 
 function openManagerVisa(entryId) {
+  if (!requirePerm('visa')) return;
   const e = findEntry(entryId);
   if (!e || e.managerVisa) return;
   const s = evalEntry(e);
@@ -2337,34 +2854,37 @@ function openManagerVisa(entryId) {
     <h3 class="text-lg font-bold text-slate-800">Visa du manager</h3>
     <p class="text-xs text-slate-400 mb-4">Relevé du ${formatDate(e.completedAt || e.date)} · ${escapeHtml(e.operator || '—')}<br>
       Exécution ${pctText(s.exec)} · Conformité ${pctText(s.conf)} · ${s.anomalies} anomalie(s)</p>
-    <label class="text-xs font-medium text-slate-500">Nom et prénom du manager</label>
-    <input id="mv-name" oninput="document.getElementById('mv-ok').disabled = !this.value.trim()"
-      class="w-full border-2 border-slate-200 rounded-xl px-3 py-3 mt-1 text-sm font-medium outline-none focus:border-indigo-400" placeholder="Nom et prénom du signataire">
+    <label class="text-xs font-medium text-slate-500">Signataire (compte connecté)</label>
+    <input id="mv-name" value="${escapeHtml(currentUser.displayName)}" readonly
+      class="w-full border-2 border-slate-200 bg-slate-50 text-slate-700 rounded-xl px-3 py-3 mt-1 text-sm font-medium outline-none">
     <label class="text-xs font-medium text-slate-500 mt-3 block">Commentaire (optionnel)</label>
     <textarea id="mv-comment" rows="2" class="w-full border border-slate-200 rounded-xl p-2.5 mt-1 text-sm outline-none focus:ring-2 focus:ring-indigo-200 resize-none" placeholder="Remarque du manager, actions à suivre..."></textarea>
     <p class="text-xs text-slate-400 mt-2">Le visa est horodaté et définitif : il ne pourra plus être modifié.</p>
     <div class="flex gap-2 mt-5">
       <button onclick="closeModal()" class="flex-1 py-3 rounded-xl bg-slate-100 font-medium hover:bg-slate-200">Plus tard</button>
-      <button id="mv-ok" disabled onclick="confirmManagerVisa('${e.id}')"
+      <button id="mv-ok" onclick="confirmManagerVisa('${e.id}')"
         class="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-semibold flex items-center justify-center gap-2 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed">
         <i data-lucide="pen-tool" class="w-4 h-4"></i> Viser
       </button>
     </div>`);
-  setTimeout(() => { const i = document.getElementById('mv-name'); if (i) i.focus(); }, 50);
+  setTimeout(() => { const i = document.getElementById('mv-comment'); if (i) i.focus(); }, 50);
 }
 
 function confirmManagerVisa(entryId) {
+  if (!requirePerm('visa')) return;
   const e = findEntry(entryId);
   if (!e || e.managerVisa) return;
-  const name = document.getElementById('mv-name').value.trim();
+  const name = currentUser.displayName;
   const comment = document.getElementById('mv-comment').value.trim();
   if (!name) { toast('Veuillez saisir le nom du manager', 'error'); return; }
 
   confirmAction(`Confirmer le visa électronique de « ${name} » ? Cette action est définitive, horodatée, et ne pourra plus être modifiée.`, () => {
-    e.managerVisa = { name, comment, signedAt: new Date().toISOString() };
+    e.managerVisa = { name, comment, userId: currentUser.id, signedAt: new Date().toISOString() };
     saveState();
-    if (document.getElementById('view-detail').classList.contains('hidden')) openDetail(currentTourId);
-    else renderDetail();
+    updateHeaderUser();
+    if (!document.getElementById('view-detail').classList.contains('hidden')) renderDetail();
+    else if (!document.getElementById('view-home').classList.contains('hidden')) renderHome();
+    else openDetail(currentTourId);
     toast('Visa manager enregistré', 'success');
   }, 'Viser');
 }
@@ -2372,9 +2892,7 @@ function confirmManagerVisa(entryId) {
 
 /* --------------------------- 12. INITIALISATION -------------------------- */
 
-document.addEventListener('DOMContentLoaded', () => {
-  try {
-  } catch (e) { /* non bloquant */ }
+document.addEventListener('DOMContentLoaded', async () => {
 
   loadState();
 
@@ -2388,7 +2906,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const dateInput = document.getElementById('exec-date');
   if (dateInput) dateInput.value = new Date().toISOString().substring(0, 10);
 
-  showView('home');
+  await ensureDefaultAdmin();
+  loadSession();
+  document.getElementById('login-username').addEventListener('keydown', ev => { if (ev.key === 'Enter') document.getElementById('login-password').focus(); });
+  document.getElementById('login-password').addEventListener('keydown', ev => { if (ev.key === 'Enter') doLogin(); });
+
+  showView(currentUser ? 'home' : 'login');
   lucide.createIcons();
 });
 </script>
